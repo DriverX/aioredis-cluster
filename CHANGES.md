@@ -1,7 +1,7 @@
 Changes
 =======
 
-x.x.x (xxxx-xx-xx)
+1.5.1 (2020-12-11)
 ------------------
 
 * speedup crc16. Use implementation from python stdlib
