@@ -1,0 +1,129 @@
+# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+
+name: Python package
+
+on:
+  push:
+    branches:
+      - master
+      - github_actions
+    tags:
+      - v*
+
+jobs:
+
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version:
+          - '3.6'
+          - '3.7'
+          - '3.8'
+          - '3.9'
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          python -m pip install -U pip setuptools
+          python -m pip install -Ue '.[devel]'
+      - name: Lint with flake8
+        run: |
+          make flake
+      - name: Lint with black
+        run: |
+          make black-check
+      - name: Lint with mypy
+        run: |
+          make mypy
+      - name: Test with pytest
+        run: |
+          make test
+
+  system_tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        redis-version:
+          - '3.2.12'
+          - '4.0.14'
+          - '5.0.9'
+
+    services:
+      redis:
+        image: grokzen/redis-cluster:${{ matrix.redis-version }}
+        ports:
+          - 7000-7007:7000-7007
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+      - name: Install dependencies
+        run: |
+          python -m pip install -U pip setuptools
+          python -m pip install -Ue '.[devel]'
+      - name: Test with pytest and redis
+        run: |
+          pytest tests/system_tests
+        env:
+          REDIS_CLUSTER_STARTUP_NODES: 'redis://localhost:7000'
+
+  pre-deploy:
+    name: Pre-Deploy
+    runs-on: ubuntu-latest
+    # needs:
+    #   - tests
+    # Run only on pushing a tag
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Dummy
+        run: |
+            echo "Predeploy step"
+
+  build-packages:
+    needs:
+      - pre-deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+      - name: Build distrib
+        run: |
+          VERSION=$(echo '${{ github.ref }}' | cut -d"/" -f3 | cut -c2-)
+          echo $VERSION
+          make dist VERSION="$VERSION"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: dist
+          path: dist
+
+  deploy:
+    name: Deploy
+    needs:
+      - build-packages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download dists
+        uses: actions/download-artifact@v2
+        with:
+          name: dist
+          path: dist
+      - name: Publish package
+        uses: pypa/gh-action-pypi-publish@master
+        with:
+          user: __token__
+          password: ${{ secrets.TEST_PYPI_TOKEN }}
+          repository_url: https://test.pypi.org/legacy/
