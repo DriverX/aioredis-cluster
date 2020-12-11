@@ -1,6 +1,11 @@
 Changes
 =======
 
+x.x.x (xxxx-xx-xx)
+------------------
+
+* speedup crc16. Use implementation from python stdlib
+
 1.5.0 (2020-12-10)
 ------------------
 
