@@ -1,7 +1,7 @@
 aioredis_cluster
 ================
 
-Redis Cluster support for aioredis.
+Redis Cluster support for [aioredis](https://github.com/aio-libs/aioredis).
 
 Many implementation features were inspired by [go-redis](https://github.com/go-redis/redis) project.
 
