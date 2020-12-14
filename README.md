@@ -1,7 +1,7 @@
 aioredis_cluster
 ================
 
-[![PyPI version](https://badge.fury.io/py/aioredis-cluster.svg)](https://badge.fury.io/py/aioredis-cluster) ![aioredis-cluster CI/CD](https://github.com/DriverX/aioredis-cluster/workflows/aioredis-cluster%20CI/CD/badge.svg)
+[![PyPI version](https://badge.fury.io/py/aioredis-cluster.svg)](https://pypi.org/project/aioredis-cluster/) ![aioredis-cluster CI/CD](https://github.com/DriverX/aioredis-cluster/workflows/aioredis-cluster%20CI/CD/badge.svg)
 
 Redis Cluster support for [aioredis](https://github.com/aio-libs/aioredis).
 
