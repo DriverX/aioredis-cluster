@@ -1,5 +1,6 @@
 import asyncio
-from typing import Dict, List, NamedTuple, Optional, Sequence, Set
+from itertools import chain
+from typing import Dict, List, NamedTuple, Optional, Sequence, Set, Iterable
 
 import attr
 
@@ -21,6 +22,18 @@ class PoolHolder:
     generation: int
 
 
+@attr.dataclass(slots=True)
+class NodePools:
+    public: Optional[PoolHolder]
+    privates: List[PoolHolder]
+
+    def all_pool_holders(self) -> Iterable[PoolHolder]:
+        return chain([self.public], self.privates)
+
+    def all_pools(self) -> Iterable[AbcPool]:
+        return (holder.pool for holder in self.all_pool_holders())
+
+
 class PubSubChannel(NamedTuple):
     name: bytes
     is_pattern: bool
@@ -36,7 +49,7 @@ class Pooler:
         reap_frequency: float = None,
     ) -> None:
         self._create_pool = pool_creator
-        self._nodes: Dict[Address, PoolHolder] = {}
+        self._nodes: Dict[Address, NodePools] = {}
         self._creation_lock: ResourceLock[Address] = ResourceLock()
         self._pubsub_channels: Dict[PubSubChannel, Address] = {}
         self._pubsub_addrs: Dict[Address, Set[PubSubChannel]] = {}
@@ -61,15 +74,19 @@ class Pooler:
             await op(pool)
 
     async def ensure_pool(self, addr: Address) -> AbcPool:
-        if addr in self._nodes and self._nodes[addr].pool.closed:
-            self._erase_addr(addr)
+        if (
+            addr in self._nodes and
+            self._nodes[addr].public is not None and
+            self._nodes[addr].public.pool.closed
+        ):
+            self._erase_public_addr(addr)
 
-        if addr not in self._nodes:
+        if addr not in self._nodes or self._nodes[addr].public is None:
             async with self._creation_lock(addr):
                 if addr not in self._nodes:
-                    logger.debug("Create connections pool for %s", addr)
+                    logger.debug("Create public connections pool for %s", addr)
                     pool = await self._create_pool((addr.host, addr.port))
-                    self._nodes[addr] = PoolHolder(pool, self._reap_calls)
+                    self._nodes[addr].public = PoolHolder(pool, self._reap_calls)
                     self._pubsub_addrs[addr] = set()
 
         holder = self._nodes[addr]
@@ -79,12 +96,12 @@ class Pooler:
     async def close_only(self, addrs: Sequence[Address]) -> None:
         collected = []
         for addr in addrs:
-            if addr not in self._nodes:
+            if addr not in self._nodes or self._nodes[addr].public is None:
                 continue
 
-            holder = self._nodes[addr]
+            holder = self._nodes[addr].public
 
-            self._erase_addr(addr)
+            self._erase_public_addr(addr)
 
             holder.pool.close()
             collected.append(holder.pool)
@@ -158,7 +175,7 @@ class Pooler:
                 h.pool.close()
 
                 # cleanup collections
-                self._erase_addr(addr)
+                self._erase_public_addr(addr)
 
                 collected.append(h.pool)
 
@@ -178,8 +195,8 @@ class Pooler:
             await asyncio.sleep(self._reap_frequency)
             await self._reap_pools()
 
-    def _erase_addr(self, addr: Address) -> None:
-        del self._nodes[addr]
+    def _erase_public_addr(self, addr: Address) -> None:
+        self._nodes[addr].public = None
         channels = self._pubsub_addrs.pop(addr)
         for ch in channels:
             del self._pubsub_channels[ch]
