@@ -24,7 +24,7 @@ async def test_connection(redis_cluster):
 
 
 async def test_general(redis_cluster):
-    """General test for frequentluy used commands"""
+    """General test for frequently used commands"""
 
     cl = await redis_cluster()
 

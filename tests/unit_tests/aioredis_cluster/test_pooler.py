@@ -109,6 +109,37 @@ async def test_ensure_pool__error(mocker, loop):
     )
 
 
+async def test_get_private_pool(mocker):
+    mocked_create_pool = asynctest.CoroutineMock(
+        return_value=create_pool_mock(),
+    )
+    pooler = Pooler(mocked_create_pool)
+
+    result = await pooler.create_private_pool(Address("localhost", 1234))
+
+    assert result is mocked_create_pool.return_value
+    mocked_create_pool.assert_called_once_with(("localhost", 1234))
+
+    await pooler.create_private_pool(Address("localhost", 1234))
+
+    assert mocked_create_pool.call_count == 2
+
+
+async def test_create_private_pool__limit(mocker):
+    mocked_create_pool = asynctest.CoroutineMock(
+        return_value=create_pool_mock(),
+    )
+    pooler = Pooler(mocked_create_pool)
+
+    result = await pooler.create_private_pool(Address("localhost", 1234))
+
+    assert result is mocked_create_pool.return_value
+    mocked_create_pool.assert_called_once_with(("localhost", 1234))
+
+    with pytest.raises(ValueError):
+        await pooler.create_private_pool(Address("localhost", 1234), limit=1)
+
+
 async def test_close__empty_pooler():
     pooler = Pooler(asynctest.CoroutineMock())
     await pooler.close()
@@ -120,6 +151,7 @@ async def test_close__with_pools(mocker):
     addrs_pools = [
         (Address("h1", 1), create_pool_mock()),
         (Address("h2", 2), create_pool_mock()),
+        (Address("h3", 3), create_pool_mock()),
     ]
     addrs = [p[0] for p in addrs_pools]
     pools = [p[1] for p in addrs_pools]
@@ -129,17 +161,23 @@ async def test_close__with_pools(mocker):
 
     result1 = await pooler.ensure_pool(addrs[0])
     result2 = await pooler.ensure_pool(addrs[1])
+    result3 = await pooler.create_private_pool(addrs[2])
 
-    assert len(pooler._nodes) == 2
+    assert len(pooler._public_pools) == 2
+    assert len(pooler._private_pools) == 1
 
     await pooler.close()
 
-    assert len(pooler._nodes) == 0
+    assert len(pooler._public_pools) == 0
+    assert len(pooler._private_pools) == 0
+
     assert pooler.closed is True
     result1.close.assert_called_once()
     result2.close.assert_called_once()
+    result3.close.assert_called_once()
     result1.wait_closed.assert_called_once()
     result2.wait_closed.assert_called_once()
+    result3.wait_closed.assert_called_once()
 
 
 async def test_reap_pools(mocker):
@@ -167,12 +205,12 @@ async def test_reap_pools(mocker):
 
     assert len(reaped) == 1
     assert reaped[0] is pools[0]
-    assert len(pooler._nodes) == 1
+    assert len(pooler._public_pools) == 1
 
     reaped = await pooler._reap_pools()
     assert len(reaped) == 1
     assert reaped[0] is pools[1]
-    assert len(pooler._nodes) == 0
+    assert len(pooler._public_pools) == 0
 
 
 async def test_reaper(mocker):
