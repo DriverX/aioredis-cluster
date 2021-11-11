@@ -7,7 +7,7 @@ import attr
 from aioredis_cluster.abc import AbcPool
 from aioredis_cluster.log import logger
 from aioredis_cluster.resource_lock import ResourceLock
-from aioredis_cluster.structs import Address
+from aioredis_cluster.structs import Address, PrivatePoolDescription
 from aioredis_cluster.typedef import PoolCreator, PoolerBatchCallback
 
 
@@ -42,6 +42,7 @@ class Pooler:
         pool_creator: PoolCreator,
         *,
         reap_frequency: float = None,
+        private_pools_limit: int = None,
     ) -> None:
         self._create_pool = pool_creator
         self._public_pools: Dict[Address, PoolHolder] = {}
@@ -54,6 +55,10 @@ class Pooler:
             reap_frequency = self.REAP_FREQUENCY
         self._reap_frequency = reap_frequency
         self._reap_calls = 0
+
+        if private_pools_limit is None:
+            private_pools_limit = self.PRIVATE_POOLS_LIMIT
+        self._private_pools_limit: int = private_pools_limit
 
         self._reaper_task = None
         if self._reap_frequency >= 0:
@@ -85,16 +90,21 @@ class Pooler:
         holder.generation = self._reap_calls
         return holder.pool
 
-    async def create_private_pool(self, addr: Address, limit: Optional[int] = None) -> AbcPool:
-        if limit is None:
-            limit = self.PRIVATE_POOLS_LIMIT
-
+    async def create_private_pool(
+        self,
+        addr: Address,
+        private_pool_description: PrivatePoolDescription,
+    ) -> AbcPool:
         self._private_pools = [p for p in self._private_pools if not p.pool.closed]
-        if len(self._private_pools) >= limit:
+        if len(self._private_pools) >= self._private_pools_limit:
             raise ValueError("Number of private pools limit reached")
 
         logger.debug("Create private connections pool for %s", addr)
-        pool = await self._create_pool((addr.host, addr.port))
+        pool = await self._create_pool(
+            (addr.host, addr.port),
+            private_pool_description.pool_minsize,
+            private_pool_description.pool_maxsize,
+        )
         self._private_pools.append(AddrPoolPair(addr, pool))
 
         return pool

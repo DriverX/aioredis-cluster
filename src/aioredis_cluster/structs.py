@@ -80,3 +80,9 @@ class ExecuteProps:
 class ExecuteFailProps:
     node_addr: Address = attr.ib()
     error: Exception = attr.ib()
+
+
+@attr.s(slots=True, kw_only=True)
+class PrivatePoolDescription:
+    pool_minsize: Optional[int] = attr.ib(default=None)
+    pool_maxsize: Optional[int] = attr.ib(default=None)

@@ -35,6 +35,7 @@ from aioredis_cluster.structs import (
     ExecuteContext,
     ExecuteFailProps,
     ExecuteProps,
+    PrivatePoolDescription,
 )
 from aioredis_cluster.typedef import (
     AioredisAddress,
@@ -81,6 +82,7 @@ class Cluster(AbcCluster):
         follow_cluster: bool = None,
         # pool options
         idle_connection_timeout: float = None,
+        private_pools_limit: int = None,
         # node client options
         password: str = None,
         encoding: str = None,
@@ -158,7 +160,11 @@ class Cluster(AbcCluster):
             pool_cls = ConnectionsPool
         self._pool_cls = pool_cls
 
-        self._pooler = Pooler(self._create_pool, reap_frequency=idle_connection_timeout)
+        self._pooler = Pooler(
+            self._create_pool,
+            reap_frequency=idle_connection_timeout,
+            private_pools_limit=private_pools_limit,
+        )
 
         self._manager = ClusterManager(
             startup_nodes,
@@ -371,7 +377,7 @@ class Cluster(AbcCluster):
 
         return slot
 
-    async def all_masters(self, *, private: bool = False) -> List[Redis]:
+    async def all_masters(self, *, private: PrivatePoolDescription = None) -> List[Redis]:
         ctx = self._make_exec_context((b"PING",), {})
 
         exec_fail_props: Optional[ExecuteFailProps] = None
@@ -388,8 +394,8 @@ class Cluster(AbcCluster):
             pools = []
             try:
                 for node in state.masters:
-                    if private:
-                        pool = await self._pooler.create_private_pool(node.addr)
+                    if private is not None:
+                        pool = await self._pooler.create_private_pool(node.addr, private)
                     else:
                         pool = await self._pooler.ensure_pool(node.addr)
                     start_exec_t = monotonic()
@@ -414,7 +420,12 @@ class Cluster(AbcCluster):
 
         return pools
 
-    async def keys_master(self, key: AnyStr, *keys: AnyStr, private: bool = False) -> Redis:
+    async def keys_master(
+        self,
+        key: AnyStr,
+        *keys: AnyStr,
+        private: PrivatePoolDescription = None,
+    ) -> Redis:
         self._check_closed()
 
         slot = self.determine_slot(ensure_bytes(key), *iter_ensure_bytes(keys))
@@ -432,7 +443,7 @@ class Cluster(AbcCluster):
             exec_fail_props = None
             try:
                 if private:
-                    pool = await self._pooler.create_private_pool(node.addr)
+                    pool = await self._pooler.create_private_pool(node.addr, private)
                 else:
                     pool = await self._pooler.ensure_pool(node.addr)
                 await self._pool_execute(pool, ctx.cmd, ctx.kwargs, timeout=self._attempt_timeout)
@@ -644,14 +655,24 @@ class Cluster(AbcCluster):
         # slowdown retry calls
         await self._execute_retry_slowdown(ctx.attempt, ctx.max_attempts)
 
-    async def _create_pool(self, addr: AioredisAddress) -> AbcPool:
+    async def _create_pool(
+        self,
+        addr: AioredisAddress,
+        pool_minsize: int = None,
+        pool_maxsize: int = None,
+    ) -> AbcPool:
+        if pool_minsize is None:
+            pool_minsize = self._pool_minsize
+        if pool_maxsize is None:
+            pool_maxsize = self._pool_maxsize
+
         pool = await create_pool(
             addr,
             pool_cls=self._pool_cls,
             password=self._password,
             encoding=self._encoding,
-            minsize=self._pool_minsize,
-            maxsize=self._pool_maxsize,
+            minsize=pool_minsize,
+            maxsize=pool_maxsize,
             create_connection_timeout=self._connect_timeout,
         )
         return pool

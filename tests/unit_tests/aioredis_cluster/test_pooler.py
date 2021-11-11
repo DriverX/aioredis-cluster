@@ -5,7 +5,7 @@ import asynctest
 import pytest
 
 from aioredis_cluster.pooler import Pooler
-from aioredis_cluster.structs import Address
+from aioredis_cluster.structs import Address, PrivatePoolDescription
 
 
 def create_pool_mock():
@@ -115,12 +115,13 @@ async def test_get_private_pool(mocker):
     )
     pooler = Pooler(mocked_create_pool)
 
-    result = await pooler.create_private_pool(Address("localhost", 1234))
+    private = PrivatePoolDescription(pool_minsize=12, pool_maxsize=42)
+    result = await pooler.create_private_pool(Address("localhost", 1234), private)
 
     assert result is mocked_create_pool.return_value
-    mocked_create_pool.assert_called_once_with(("localhost", 1234))
+    mocked_create_pool.assert_called_once_with(("localhost", 1234), 12, 42)
 
-    await pooler.create_private_pool(Address("localhost", 1234))
+    await pooler.create_private_pool(Address("localhost", 1234), PrivatePoolDescription())
 
     assert mocked_create_pool.call_count == 2
 
@@ -129,15 +130,15 @@ async def test_create_private_pool__limit(mocker):
     mocked_create_pool = asynctest.CoroutineMock(
         return_value=create_pool_mock(),
     )
-    pooler = Pooler(mocked_create_pool)
+    pooler = Pooler(mocked_create_pool, private_pools_limit=1)
 
-    result = await pooler.create_private_pool(Address("localhost", 1234))
+    result = await pooler.create_private_pool(Address("localhost", 1234), PrivatePoolDescription())
 
     assert result is mocked_create_pool.return_value
-    mocked_create_pool.assert_called_once_with(("localhost", 1234))
+    mocked_create_pool.assert_called_once_with(("localhost", 1234), None, None)
 
     with pytest.raises(ValueError):
-        await pooler.create_private_pool(Address("localhost", 1234), limit=1)
+        await pooler.create_private_pool(Address("localhost", 1234), PrivatePoolDescription())
 
 
 async def test_close__empty_pooler():
@@ -161,7 +162,7 @@ async def test_close__with_pools(mocker):
 
     result1 = await pooler.ensure_pool(addrs[0])
     result2 = await pooler.ensure_pool(addrs[1])
-    result3 = await pooler.create_private_pool(addrs[2])
+    result3 = await pooler.create_private_pool(addrs[2], PrivatePoolDescription())
 
     assert len(pooler._public_pools) == 2
     assert len(pooler._private_pools) == 1
