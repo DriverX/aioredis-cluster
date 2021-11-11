@@ -83,7 +83,7 @@ async def test_init__defaults(mocker):
     assert cl._pooler is mocked_pooler.return_value
     assert cl._manager is mocked_manager.return_value
     assert cl._attempt_timeout == cl.ATTEMPT_TIMEOUT
-    mocked_pooler.assert_called_once_with(cl._create_pool, reap_frequency=None)
+    mocked_pooler.assert_called_once_with(cl._create_default_pool, reap_frequency=None)
     mocked_manager.assert_called_once_with(
         ["addr1", "addr2"],
         cl._pooler,
@@ -129,7 +129,7 @@ async def test_init__customized(mocker):
     assert cl._manager is mocked_manager.return_value
     assert cl._attempt_timeout == kwargs["attempt_timeout"]
     mocked_pooler.assert_called_once_with(
-        cl._create_pool, reap_frequency=kwargs["idle_connection_timeout"]
+        cl._create_default_pool, reap_frequency=kwargs["idle_connection_timeout"]
     )
     mocked_manager.assert_called_once_with(
         ["addr1", "addr2"],
