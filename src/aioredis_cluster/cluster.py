@@ -371,7 +371,7 @@ class Cluster(AbcCluster):
 
         return slot
 
-    async def all_masters(self) -> List[Redis]:
+    async def all_masters(self, *, private: bool = False) -> List[Redis]:
         ctx = self._make_exec_context((b"PING",), {})
 
         exec_fail_props: Optional[ExecuteFailProps] = None
@@ -388,7 +388,10 @@ class Cluster(AbcCluster):
             pools = []
             try:
                 for node in state.masters:
-                    pool = await self._pooler.ensure_pool(node.addr)
+                    if private:
+                        pool = await self._pooler.create_private_pool(node.addr)
+                    else:
+                        pool = await self._pooler.ensure_pool(node.addr)
                     start_exec_t = monotonic()
 
                     await self._pool_execute(pool, ctx.cmd, ctx.kwargs, timeout=execute_timeout)
@@ -411,7 +414,7 @@ class Cluster(AbcCluster):
 
         return pools
 
-    async def keys_master(self, key: AnyStr, *keys: AnyStr) -> Redis:
+    async def keys_master(self, key: AnyStr, *keys: AnyStr, private: bool = False) -> Redis:
         self._check_closed()
 
         slot = self.determine_slot(ensure_bytes(key), *iter_ensure_bytes(keys))
@@ -428,7 +431,10 @@ class Cluster(AbcCluster):
 
             exec_fail_props = None
             try:
-                pool = await self._pooler.ensure_pool(node.addr)
+                if private:
+                    pool = await self._pooler.create_private_pool(node.addr)
+                else:
+                    pool = await self._pooler.ensure_pool(node.addr)
                 await self._pool_execute(pool, ctx.cmd, ctx.kwargs, timeout=self._attempt_timeout)
             except asyncio.CancelledError:
                 raise
