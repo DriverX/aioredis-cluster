@@ -668,8 +668,9 @@ class Cluster(AbcCluster):
 
         return pool
 
-    async def create_custom_pool(self, addr: AioredisAddress, opts: Dict) -> AbcPool:
-        return await self._create_pool(addr, opts)
+    async def create_custom_pool(self, addr: AioredisAddress, opts: Dict) -> Redis:
+        pool = await self._create_pool(addr, opts)
+        return self._commands_factory(pool)
 
     async def _conn_execute(
         self,
