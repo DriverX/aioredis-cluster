@@ -668,8 +668,31 @@ class Cluster(AbcCluster):
 
         return pool
 
-    async def create_custom_pool(self, addr: AioredisAddress, opts: Dict) -> Redis:
-        pool = await self._create_pool(addr, opts)
+    async def create_pool_by_addr(
+        self,
+        addr: Address,
+        *,
+        pool_cls: ConnectionsPool = None,
+        minsize: int = None,
+        maxsize: int = None,
+    ) -> Redis:
+        masters = await self.get_all_master_nodes()
+        addresses = [m.addr for m in masters]
+        if not any(a == addr for a in addresses):
+            raise ValueError(
+                "Unknown master %s:%s (available are %s)", addr.host, addr.port, addresses
+            )
+
+        opts: Dict[str, Any] = {}
+        if pool_cls is not None:
+            opts["pool_cls"] = pool_cls
+        if minsize is not None:
+            opts["minsize"] = minsize
+        if maxsize is not None:
+            opts["maxsize"] = maxsize
+
+        pool = await self._create_pool((addr.host, addr.port), opts)
+
         return self._commands_factory(pool)
 
     async def _conn_execute(
