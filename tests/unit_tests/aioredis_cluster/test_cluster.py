@@ -83,7 +83,7 @@ async def test_init__defaults(mocker):
     assert cl._pooler is mocked_pooler.return_value
     assert cl._manager is mocked_manager.return_value
     assert cl._attempt_timeout == cl.ATTEMPT_TIMEOUT
-    mocked_pooler.assert_called_once_with(cl._create_pool, reap_frequency=None)
+    mocked_pooler.assert_called_once_with(cl._create_default_pool, reap_frequency=None)
     mocked_manager.assert_called_once_with(
         ["addr1", "addr2"],
         cl._pooler,
@@ -129,7 +129,7 @@ async def test_init__customized(mocker):
     assert cl._manager is mocked_manager.return_value
     assert cl._attempt_timeout == kwargs["attempt_timeout"]
     mocked_pooler.assert_called_once_with(
-        cl._create_pool, reap_frequency=kwargs["idle_connection_timeout"]
+        cl._create_default_pool, reap_frequency=kwargs["idle_connection_timeout"]
     )
     mocked_manager.assert_called_once_with(
         ["addr1", "addr2"],
@@ -168,6 +168,68 @@ async def test_create_pool(mocker):
         maxsize=15,
         create_connection_timeout=1.2,
     )
+
+
+async def test_create_pool_by_addr(mocker):
+    mocked_create_pool = mocker.patch(
+        Cluster.__module__ + ".create_pool", new=asynctest.CoroutineMock()
+    )
+
+    pool_cls = mock.Mock()
+    cl = Cluster(
+        ["addr1"],
+        password="foobar",
+        encoding="utf-8",
+        pool_minsize=5,
+        pool_maxsize=15,
+        connect_timeout=1.2,
+        pool_cls=pool_cls,
+    )
+    mocked_manager = mocker.patch.object(cl, "_manager", new=get_manager_mock())
+    state = mocked_manager.get_state.return_value
+    state.masters = [
+        mock.NonCallableMock(name="master1", addr=("addr1", 8001)),
+        mock.NonCallableMock(name="master2", addr=("addr2", 8002)),
+        mock.NonCallableMock(name="master3", addr=("addr3", 8003)),
+    ]
+
+    addr = Address("addr2", 8002)
+    redis = await cl.create_pool_by_addr(addr, maxsize=42)
+
+    assert redis.connection is mocked_create_pool.return_value
+    mocked_create_pool.assert_called_once_with(
+        ("addr2", 8002),
+        pool_cls=pool_cls,
+        password="foobar",
+        encoding="utf-8",
+        minsize=5,
+        maxsize=42,
+        create_connection_timeout=1.2,
+    )
+
+
+async def test_create_pool_by_addr__bad_addr(mocker):
+    pool_cls = mock.Mock()
+    cl = Cluster(
+        ["addr1"],
+        password="foobar",
+        encoding="utf-8",
+        pool_minsize=5,
+        pool_maxsize=15,
+        connect_timeout=1.2,
+        pool_cls=pool_cls,
+    )
+    mocked_manager = mocker.patch.object(cl, "_manager", new=get_manager_mock())
+    state = mocked_manager.get_state.return_value
+    state.masters = [
+        mock.NonCallableMock(name="master1", addr=("addr1", 8001)),
+        mock.NonCallableMock(name="master2", addr=("addr2", 8002)),
+        mock.NonCallableMock(name="master3", addr=("addr3", 8003)),
+    ]
+
+    addr = Address("addr4", 8004)
+    with pytest.raises(ValueError):
+        await cl.create_pool_by_addr(addr, maxsize=42)
 
 
 async def test_auth(mocker):

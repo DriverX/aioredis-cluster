@@ -3,7 +3,7 @@ import logging
 from collections import ChainMap
 from time import monotonic
 from types import MappingProxyType
-from typing import Any, AnyStr, Dict, List, Optional, Sequence
+from typing import Any, AnyStr, Dict, List, Optional, Sequence, Iterable
 
 from aioredis import Redis, create_pool
 from aioredis.errors import ProtocolError, ReplyError
@@ -35,6 +35,7 @@ from aioredis_cluster.structs import (
     ExecuteContext,
     ExecuteFailProps,
     ExecuteProps,
+    ClusterNode,
 )
 from aioredis_cluster.typedef import (
     AioredisAddress,
@@ -158,7 +159,7 @@ class Cluster(AbcCluster):
             pool_cls = ConnectionsPool
         self._pool_cls = pool_cls
 
-        self._pooler = Pooler(self._create_pool, reap_frequency=idle_connection_timeout)
+        self._pooler = Pooler(self._create_default_pool, reap_frequency=idle_connection_timeout)
 
         self._manager = ClusterManager(
             startup_nodes,
@@ -381,13 +382,13 @@ class Cluster(AbcCluster):
 
             ctx.attempt += 1
 
-            state = await self._manager.get_state()
+            masters = await self.get_all_master_nodes()
 
             exec_fail_props = None
             execute_timeout = self._attempt_timeout
             pools = []
             try:
-                for node in state.masters:
+                for node in masters:
                     pool = await self._pooler.ensure_pool(node.addr)
                     start_exec_t = monotonic()
 
@@ -413,8 +414,6 @@ class Cluster(AbcCluster):
 
     async def keys_master(self, key: AnyStr, *keys: AnyStr) -> Redis:
         self._check_closed()
-
-        slot = self.determine_slot(ensure_bytes(key), *iter_ensure_bytes(keys))
         ctx = self._make_exec_context((b"EXISTS", key), {})
 
         exec_fail_props: Optional[ExecuteFailProps] = None
@@ -423,8 +422,7 @@ class Cluster(AbcCluster):
 
             ctx.attempt += 1
 
-            state = await self._manager.get_state()
-            node = state.slot_master(slot)
+            node = await self.get_master_node_by_keys(key, *keys)
 
             exec_fail_props = None
             try:
@@ -445,6 +443,18 @@ class Cluster(AbcCluster):
             break
 
         return self._commands_factory(pool)
+
+    async def get_master_node_by_keys(self, key: AnyStr, *keys: AnyStr) -> ClusterNode:
+        slot = self.determine_slot(ensure_bytes(key), *iter_ensure_bytes(keys))
+        state = await self._manager.get_state()
+        node = state.slot_master(slot)
+
+        return node
+
+    async def get_all_master_nodes(self) -> Iterable[ClusterNode]:
+        state = await self._manager.get_state()
+
+        return state.masters
 
     async def _init(self) -> None:
         await self._manager._init()
@@ -638,9 +648,14 @@ class Cluster(AbcCluster):
         # slowdown retry calls
         await self._execute_retry_slowdown(ctx.attempt, ctx.max_attempts)
 
-    async def _create_pool(self, addr: AioredisAddress) -> AbcPool:
-        pool = await create_pool(
-            addr,
+    async def _create_default_pool(self, addr: AioredisAddress) -> AbcPool:
+        return await self._create_pool(addr)
+
+    async def _create_pool(self, addr: AioredisAddress, opts: Dict = None) -> AbcPool:
+        if opts is None:
+            opts = {}
+
+        default_opts = dict(
             pool_cls=self._pool_cls,
             password=self._password,
             encoding=self._encoding,
@@ -648,7 +663,37 @@ class Cluster(AbcCluster):
             maxsize=self._pool_maxsize,
             create_connection_timeout=self._connect_timeout,
         )
+
+        pool = await create_pool(addr, **{**default_opts, **opts})
+
         return pool
+
+    async def create_pool_by_addr(
+        self,
+        addr: Address,
+        *,
+        pool_cls: ConnectionsPool = None,
+        minsize: int = None,
+        maxsize: int = None,
+    ) -> Redis:
+        masters = await self.get_all_master_nodes()
+        addresses = [m.addr for m in masters]
+        if not any(a == addr for a in addresses):
+            raise ValueError(
+                "Unknown master %s:%s (available are %s)", addr.host, addr.port, addresses
+            )
+
+        opts: Dict[str, Any] = {}
+        if pool_cls is not None:
+            opts["pool_cls"] = pool_cls
+        if minsize is not None:
+            opts["minsize"] = minsize
+        if maxsize is not None:
+            opts["maxsize"] = maxsize
+
+        pool = await self._create_pool((addr.host, addr.port), opts)
+
+        return self._commands_factory(pool)
 
     async def _conn_execute(
         self,
