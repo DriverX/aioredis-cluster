@@ -6,7 +6,7 @@ import pytest
 from aioredis_cluster.resource_lock import ResourceLock
 
 
-async def test_acquire__sequentially(loop):
+async def test_acquire__sequentially(event_loop):
     lock = ResourceLock()
 
     results = []
@@ -17,9 +17,9 @@ async def test_acquire__sequentially(loop):
         await lock.acquire("test")
         results.append(task_id)
 
-    task1 = loop.create_task(task(1))
-    task2 = loop.create_task(task(2))
-    task3 = loop.create_task(task(3))
+    task1 = event_loop.create_task(task(1))
+    task2 = event_loop.create_task(task(2))
+    task3 = event_loop.create_task(task(3))
     tasks = {task1, task2, task3}
 
     done, pending = await asyncio.wait(tasks, return_when="FIRST_COMPLETED")
@@ -45,7 +45,7 @@ async def test_acquire__sequentially(loop):
     assert results == [1, 2, 3]
 
 
-async def test_locked(loop):
+async def test_locked(event_loop):
     lock = ResourceLock()
 
     assert lock.locked("foo") is False
@@ -58,7 +58,7 @@ async def test_locked(loop):
 
     # create two bar locks
     await lock.acquire("bar")
-    bar_lock_task = loop.create_task(lock.acquire("bar"))
+    bar_lock_task = event_loop.create_task(lock.acquire("bar"))
 
     assert lock.locked("foo") is True
     assert lock.locked("bar") is True

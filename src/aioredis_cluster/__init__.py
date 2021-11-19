@@ -14,6 +14,8 @@ from .errors import (
     UncoveredSlotError,
 )
 from .factory import create_cluster, create_redis_cluster, is_redis_cluster
+from .manager import ClusterState
+from .structs import Address, ClusterNode
 
 
 __all__ = [
@@ -37,4 +39,9 @@ __all__ = [
     "LoadingError",
     # helpers
     "is_redis_cluster",
+    # public structs
+    "Address",
+    "ClusterNode",
+    # cluster management
+    "ClusterState",
 ]

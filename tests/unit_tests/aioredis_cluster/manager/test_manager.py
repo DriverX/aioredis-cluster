@@ -1,8 +1,7 @@
 import asyncio
 import time
-from unittest import mock
 
-import asynctest
+import mock
 import pytest
 
 from aioredis_cluster.manager import ClusterManager
@@ -13,16 +12,16 @@ from aioredis_cluster.structs import Address, ClusterNode
 def pooler_mock():
     def factory():
         mocked_pool = mock.NonCallableMock()
-        mocked_pool.execute = asynctest.CoroutineMock()
+        mocked_pool.execute = mock.AsyncMock()
 
         mocked = mock.NonCallableMock()
-        mocked.ensure_pool = asynctest.CoroutineMock(return_value=mocked_pool)
+        mocked.ensure_pool = mock.AsyncMock(return_value=mocked_pool)
         return mocked
 
     return factory
 
 
-async def test_require_reload_state(pooler_mock, loop):
+async def test_require_reload_state(pooler_mock):
     pooler = pooler_mock()
     manager = ClusterManager(["addr1", "addr2"], pooler)
 
@@ -35,15 +34,15 @@ async def test_require_reload_state(pooler_mock, loop):
     await manager.close()
 
 
-async def test_state_reloader(mocker, pooler_mock, loop):
+async def test_state_reloader(mocker, pooler_mock, event_loop):
     pooler = pooler_mock()
     manager = ClusterManager(["addr1", "addr2"], pooler)
 
-    load_state_fut = loop.create_future()
+    load_state_fut = event_loop.create_future()
     mocked_load_state = mocker.patch.object(
         manager,
         "_load_state",
-        new=asynctest.CoroutineMock(side_effect=lambda reload_id: load_state_fut.set_result(None)),
+        new=mock.AsyncMock(side_effect=lambda reload_id: load_state_fut.set_result(None)),
     )
 
     manager.require_reload_state()
@@ -59,7 +58,7 @@ async def test_get_state__no_state_load_state(mocker, pooler_mock):
     pooler = pooler_mock()
     manager = ClusterManager(["addr1", "addr2"], pooler)
 
-    mocked_load_state = mocker.patch.object(manager, "_load_state", new=asynctest.CoroutineMock())
+    mocked_load_state = mocker.patch.object(manager, "_load_state", new=mock.AsyncMock())
 
     state = await manager.get_state()
 
@@ -74,7 +73,7 @@ async def test_get_state__state_exists(mocker, pooler_mock):
     manager = ClusterManager(["addr1", "addr2"], pooler)
 
     state = mock.NonCallableMock()
-    state.created_at = time.time()
+    state._data.created_at = time.time()
     manager._state = state
 
     mocked_require_reload_state = mocker.patch.object(manager, "require_reload_state")
@@ -107,21 +106,21 @@ async def test_get_state__state_exists_and_require_reload_state(mocker, pooler_m
     await manager.close()
 
 
-async def test_load_state(mocker, pooler_mock, loop):
+async def test_load_state(mocker, pooler_mock):
     pooler = pooler_mock()
 
     mocker.patch(ClusterManager.__module__ + ".random.sample", return_value=["addr1", "addr2"])
 
     manager = ClusterManager(["addr1", "addr2"], pooler)
 
-    mocked_load_slots = mocker.patch.object(manager, "_load_slots", new=asynctest.CoroutineMock())
+    mocked_load_slots = mocker.patch.object(manager, "_load_slots", new=mock.AsyncMock())
     mocked_create_cluster_state = mocker.patch(manager.__module__ + ".create_cluster_state")
     mocked_state = mocked_create_cluster_state.return_value
-    mocked_state.masters = [
+    mocked_state._data.masters = [
         ClusterNode(Address("master1", 6666), "master1_id"),
         ClusterNode(Address("master2", 7777), "master2_id"),
     ]
-    mocked_state.addrs = [object(), object()]
+    mocked_state._data.addrs = [object(), object()]
     mocked_state.random_master.return_value = ClusterNode(
         Address("random_master", 5555), "random_master_id"
     )
@@ -150,7 +149,7 @@ async def test_init(mocker, pooler_mock):
     pooler = pooler_mock()
     manager = ClusterManager(["addr1", "addr2"], pooler)
 
-    mocked_load_state = mocker.patch.object(manager, "_load_state", new=asynctest.CoroutineMock())
+    mocked_load_state = mocker.patch.object(manager, "_load_state", new=mock.AsyncMock())
 
     await manager._init()
 
@@ -160,7 +159,7 @@ async def test_init(mocker, pooler_mock):
     await manager.close()
 
 
-async def test_load_slots__first_response(mocker, pooler_mock):
+async def test_load_slots__first_response(pooler_mock):
     pooler = pooler_mock()
     pool = pooler.ensure_pool.return_value
     manager = ClusterManager(["addr1"], pooler)
@@ -172,7 +171,7 @@ async def test_load_slots__first_response(mocker, pooler_mock):
     pool.execute.assert_called_once_with(b"CLUSTER", b"SLOTS", encoding="utf-8")
 
 
-async def test_load_slots__with_error_but_success(mocker, pooler_mock):
+async def test_load_slots__with_error_but_success(pooler_mock):
     pooler = pooler_mock()
     pool = pooler.ensure_pool.return_value
 
@@ -212,7 +211,7 @@ async def test_load_slots__with_error_but_success(mocker, pooler_mock):
     )
 
 
-async def test_load_slots__with_error(mocker, pooler_mock):
+async def test_load_slots__with_error(pooler_mock):
     pooler = pooler_mock()
 
     def ensure_pool_se(addr):
@@ -264,7 +263,8 @@ async def test_get_init_addrs__cluster_following(
     manager = ClusterManager(["startup1", "startup2"], pooler)
     manager._follow_cluster = follow_cluster
     if state_addrs is not None:
-        manager._state = mock.NonCallableMock(addrs=state_addrs)
+        manager._state = mock.NonCallableMock()
+        manager._state._data.addrs = state_addrs
 
     result = manager._get_init_addrs(reload_id)
 
@@ -277,7 +277,7 @@ async def test_reload_state(mocker, pooler_mock):
 
     state = object()
     mocked_load_state = mocker.patch.object(
-        manager, "_load_state", new=asynctest.CoroutineMock(return_value=state)
+        manager, "_load_state", new=mock.AsyncMock(return_value=state)
     )
 
     result = await manager.reload_state()

@@ -17,7 +17,7 @@
 PYTHON ?= python3
 EGG_INFO = src/aioredis_cluster.egg-info
 
-all: black-check flake mypy test
+all: black isort flake mypy test
 
 clean:
 	@rm -rf build dist

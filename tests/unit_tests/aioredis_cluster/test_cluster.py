@@ -1,7 +1,6 @@
 import asyncio
-from unittest import mock
 
-import asynctest
+import mock
 import pytest
 from aioredis import (
     ConnectionClosedError,
@@ -26,22 +25,28 @@ from aioredis_cluster.errors import (
 from aioredis_cluster.structs import Address
 
 
+def create_async_mock(**kwargs):
+    if "return_value" not in kwargs:
+        kwargs["return_value"] = mock.Mock()
+    return mock.AsyncMock(**kwargs)
+
+
 def get_pooler_mock():
     mocked = mock.NonCallableMock()
-    mocked.ensure_pool = asynctest.CoroutineMock()
-    mocked.close_only = asynctest.CoroutineMock()
+    mocked.ensure_pool = create_async_mock()
+    mocked.close_only = create_async_mock()
 
     conn = mock.NonCallableMock()
-    conn.execute = asynctest.CoroutineMock()
+    conn.execute = create_async_mock()
 
     pool = mocked.ensure_pool.return_value
-    pool.execute = asynctest.CoroutineMock()
-    pool.auth = asynctest.CoroutineMock()
-    pool.acquire = asynctest.CoroutineMock(return_value=conn)
+    pool.execute = create_async_mock()
+    pool.auth = create_async_mock()
+    pool.acquire = create_async_mock(return_value=conn)
 
     conn_acquirer = mock.MagicMock()
-    conn_acquirer.__aenter__ = asynctest.CoroutineMock(return_value=conn)
-    conn_acquirer.__aexit__ = asynctest.CoroutineMock(return_value=None)
+    conn_acquirer.__aenter__ = create_async_mock(return_value=conn)
+    conn_acquirer.__aexit__ = create_async_mock(return_value=None)
 
     pool.get.return_value = conn_acquirer
 
@@ -53,7 +58,7 @@ def get_pooler_mock():
 
 def get_manager_mock():
     mocked = mock.NonCallableMock()
-    mocked.get_state = asynctest.CoroutineMock()
+    mocked.get_state = create_async_mock(return_value=mock.NonCallableMock())
     mocked.commands = default_registry
 
     return mocked
@@ -140,9 +145,7 @@ async def test_init__customized(mocker):
 
 
 async def test_create_pool(mocker):
-    mocked_create_pool = mocker.patch(
-        Cluster.__module__ + ".create_pool", new=asynctest.CoroutineMock()
-    )
+    mocked_create_pool = mocker.patch(Cluster.__module__ + ".create_pool", new=create_async_mock())
 
     pool_cls = mock.Mock()
     cl = Cluster(
@@ -171,9 +174,7 @@ async def test_create_pool(mocker):
 
 
 async def test_create_pool_by_addr(mocker):
-    mocked_create_pool = mocker.patch(
-        Cluster.__module__ + ".create_pool", new=asynctest.CoroutineMock()
-    )
+    mocked_create_pool = mocker.patch(Cluster.__module__ + ".create_pool", new=create_async_mock())
 
     pool_cls = mock.Mock()
     cl = Cluster(
@@ -187,7 +188,7 @@ async def test_create_pool_by_addr(mocker):
     )
     mocked_manager = mocker.patch.object(cl, "_manager", new=get_manager_mock())
     state = mocked_manager.get_state.return_value
-    state.masters = [
+    state._data.masters = [
         mock.NonCallableMock(name="master1", addr=("addr1", 8001)),
         mock.NonCallableMock(name="master2", addr=("addr2", 8002)),
         mock.NonCallableMock(name="master3", addr=("addr3", 8003)),
@@ -221,15 +222,13 @@ async def test_create_pool_by_addr__bad_addr(mocker):
     )
     mocked_manager = mocker.patch.object(cl, "_manager", new=get_manager_mock())
     state = mocked_manager.get_state.return_value
-    state.masters = [
-        mock.NonCallableMock(name="master1", addr=("addr1", 8001)),
-        mock.NonCallableMock(name="master2", addr=("addr2", 8002)),
-        mock.NonCallableMock(name="master3", addr=("addr3", 8003)),
-    ]
+    state.has_addr.return_value = False
 
     addr = Address("addr4", 8004)
     with pytest.raises(ValueError):
         await cl.create_pool_by_addr(addr, maxsize=42)
+
+    state.has_addr.assert_called_once_with(addr)
 
 
 async def test_auth(mocker):
@@ -242,7 +241,7 @@ async def test_auth(mocker):
         for p in [pool_mock, pool_mock]:
             await fn(p)
 
-    mocked_pooler.batch_op = asynctest.CoroutineMock(side_effect=batch_op_se)
+    mocked_pooler.batch_op = create_async_mock(side_effect=batch_op_se)
 
     await cl.auth("PASSWORD")
 
@@ -336,7 +335,7 @@ async def test_execute__success_one_connection_retry(mocker):
     state = mocked_manager.get_state.return_value
 
     mocked_execute_retry_slowdown = mocker.patch.object(
-        cl, "_execute_retry_slowdown", new=asynctest.CoroutineMock()
+        cl, "_execute_retry_slowdown", new=create_async_mock()
     )
 
     result = await cl.execute("get", "key")
@@ -362,6 +361,7 @@ async def test_execute__success_several_problem_retry(mocker):
     mocked_pooler = mocker.patch.object(cl, "_pooler", new=get_pooler_mock())
     conn = mocked_pooler._conn
     pool = mocked_pooler._pool
+    print(pool)
 
     pool_execute_count = 0
 
@@ -403,7 +403,7 @@ async def test_execute__success_several_problem_retry(mocker):
     state = mocked_manager.get_state.return_value
 
     mocked_execute_retry_slowdown = mocker.patch.object(
-        cl, "_execute_retry_slowdown", new=asynctest.CoroutineMock()
+        cl, "_execute_retry_slowdown", new=create_async_mock()
     )
 
     result = await cl.execute("get", "key")
@@ -455,7 +455,7 @@ async def test_execute__cancelled_error(mocker):
     mocked_manager = mocker.patch.object(cl, "_manager", new=get_manager_mock())
 
     mocked_execute_retry_slowdown = mocker.patch.object(
-        cl, "_execute_retry_slowdown", new=asynctest.CoroutineMock()
+        cl, "_execute_retry_slowdown", new=create_async_mock()
     )
 
     with pytest.raises(asyncio.CancelledError):
@@ -502,7 +502,7 @@ async def test_execute__error_after_max_attempts(mocker):
     state = mocked_manager.get_state.return_value
 
     mocked_execute_retry_slowdown = mocker.patch.object(
-        cl, "_execute_retry_slowdown", new=asynctest.CoroutineMock()
+        cl, "_execute_retry_slowdown", new=create_async_mock()
     )
 
     with pytest.raises(MovedError) as ei:
@@ -538,7 +538,7 @@ async def test_execute__unexpected_error(mocker):
     mocked_manager = mocker.patch.object(cl, "_manager", new=get_manager_mock())
 
     mocked_execute_retry_slowdown = mocker.patch.object(
-        cl, "_execute_retry_slowdown", new=asynctest.CoroutineMock()
+        cl, "_execute_retry_slowdown", new=create_async_mock()
     )
 
     with pytest.raises(RuntimeError, match="Boom!"):
@@ -559,7 +559,7 @@ async def test_execute__retriable_error_in_unexpected_call(mocker):
     mocked_manager.get_state.side_effect = ConnectionRefusedError()
 
     mocked_execute_retry_slowdown = mocker.patch.object(
-        cl, "_execute_retry_slowdown", new=asynctest.CoroutineMock()
+        cl, "_execute_retry_slowdown", new=create_async_mock()
     )
 
     with pytest.raises(ConnectionRefusedError):
@@ -620,7 +620,7 @@ async def test_execute__retryable_errors(mocker, error, retry_node_addr, require
     state.random_slot_replica.return_value.addr = Address("random_replica", 6379)
 
     mocked_execute_retry_slowdown = mocker.patch.object(
-        cl, "_execute_retry_slowdown", new=asynctest.CoroutineMock()
+        cl, "_execute_retry_slowdown", new=create_async_mock()
     )
 
     result = await cl.execute("get", "key")
@@ -680,7 +680,7 @@ async def test_keys_master__with_retries_but_success(mocker):
     mocked_manager = mocker.patch.object(cl, "_manager", new=get_manager_mock())
     state = mocked_manager.get_state.return_value
 
-    mocker.patch.object(cl, "_execute_retry_slowdown", new=asynctest.CoroutineMock())
+    mocker.patch.object(cl, "_execute_retry_slowdown", new=create_async_mock())
 
     result = await cl.keys_master("key")
 
@@ -707,7 +707,7 @@ async def test_keys_master__with_error_after_retries(mocker):
     mocked_manager = mocker.patch.object(cl, "_manager", new=get_manager_mock())
     state = mocked_manager.get_state.return_value
 
-    mocker.patch.object(cl, "_execute_retry_slowdown", new=asynctest.CoroutineMock())
+    mocker.patch.object(cl, "_execute_retry_slowdown", new=create_async_mock())
 
     with pytest.raises(ClusterDownError):
         await cl.keys_master("key")
@@ -742,31 +742,31 @@ async def test_all_masters__with_error_after_retries(mocker):
 
     mocked_manager = mocker.patch.object(cl, "_manager", new=get_manager_mock())
     state = mocked_manager.get_state.return_value
-    state.masters = [
+    state._data.masters = [
         mock.NonCallableMock(name="master1"),
         mock.NonCallableMock(name="master2"),
         mock.NonCallableMock(name="master3"),
     ]
 
-    mocker.patch.object(cl, "_execute_retry_slowdown", new=asynctest.CoroutineMock())
+    mocker.patch.object(cl, "_execute_retry_slowdown", new=create_async_mock())
 
     with pytest.raises(ClusterDownError):
         await cl.all_masters()
 
 
-async def test_execute__with_attempt_timeout__non_idempotent(mocker, loop):
+async def test_execute__with_attempt_timeout__non_idempotent(mocker, event_loop):
     cl = Cluster(["addr1"], attempt_timeout=0.001)
 
     mocked_pooler = mocker.patch.object(cl, "_pooler", new=get_pooler_mock())
     pool = mocked_pooler._pool
-    pool.execute = mock.Mock(return_value=loop.create_future())
+    pool.execute = mock.Mock(return_value=event_loop.create_future())
 
     mocked_manager = mocker.patch.object(cl, "_manager", new=get_manager_mock())
     state = mocked_manager.get_state.return_value
     state.slot_master.return_value.addr = Address("1.2.3.4", 9999)
 
     mocked_execute_retry_slowdown = mocker.patch.object(
-        cl, "_execute_retry_slowdown", new=asynctest.CoroutineMock()
+        cl, "_execute_retry_slowdown", new=create_async_mock()
     )
 
     with pytest.raises(asyncio.TimeoutError):
@@ -778,7 +778,7 @@ async def test_execute__with_attempt_timeout__non_idempotent(mocker, loop):
     mocked_execute_retry_slowdown.assert_not_called()
 
 
-async def test_execute__with_attempt_timeout__idempotent(mocker, loop):
+async def test_execute__with_attempt_timeout__idempotent(mocker):
     cl = Cluster(["addr1"], max_attempts=3)
 
     mocked_pooler = mocker.patch.object(cl, "_pooler", new=get_pooler_mock())
@@ -791,7 +791,7 @@ async def test_execute__with_attempt_timeout__idempotent(mocker, loop):
     state.random_node.return_value.addr = Address("6.6.6.6", 9999)
 
     mocked_execute_retry_slowdown = mocker.patch.object(
-        cl, "_execute_retry_slowdown", new=asynctest.CoroutineMock()
+        cl, "_execute_retry_slowdown", new=create_async_mock()
     )
 
     with pytest.raises(asyncio.TimeoutError):
@@ -803,7 +803,7 @@ async def test_execute__with_attempt_timeout__idempotent(mocker, loop):
     assert mocked_execute_retry_slowdown.call_count == 2
 
 
-async def test_execute__with_attempt_timeout__idempotent__success(mocker, loop):
+async def test_execute__with_attempt_timeout__idempotent__success(mocker):
     cl = Cluster(["addr1"], max_attempts=4)
 
     mocked_pooler = mocker.patch.object(cl, "_pooler", new=get_pooler_mock())
@@ -821,7 +821,7 @@ async def test_execute__with_attempt_timeout__idempotent__success(mocker, loop):
     state.random_node.return_value.addr = Address("6.6.6.6", 9999)
 
     mocked_execute_retry_slowdown = mocker.patch.object(
-        cl, "_execute_retry_slowdown", new=asynctest.CoroutineMock()
+        cl, "_execute_retry_slowdown", new=create_async_mock()
     )
 
     result = await cl.execute("get", "key")
@@ -833,7 +833,7 @@ async def test_execute__with_attempt_timeout__idempotent__success(mocker, loop):
     assert mocked_execute_retry_slowdown.call_count == 3
 
 
-async def test_keys_master__with_attempt_timeout(mocker, loop):
+async def test_keys_master__with_attempt_timeout(mocker):
     cl = Cluster(["addr1"], max_attempts=2)
 
     mocked_pooler = mocker.patch.object(cl, "_pooler", new=get_pooler_mock())
@@ -845,7 +845,7 @@ async def test_keys_master__with_attempt_timeout(mocker, loop):
     state.slot_master.return_value.addr = Address("1.2.3.4", 9999)
 
     mocked_execute_retry_slowdown = mocker.patch.object(
-        cl, "_execute_retry_slowdown", new=asynctest.CoroutineMock()
+        cl, "_execute_retry_slowdown", new=create_async_mock()
     )
 
     with pytest.raises(asyncio.TimeoutError):
@@ -857,25 +857,31 @@ async def test_keys_master__with_attempt_timeout(mocker, loop):
     assert mocked_execute_retry_slowdown.call_count == 1
 
 
-async def test_all_masters__with_attempt_timeout(mocker, loop):
+async def test_all_masters__with_attempt_timeout(mocker, event_loop):
     cl = Cluster(["addr1"], attempt_timeout=0.001)
 
     mocked_pooler = mocker.patch.object(cl, "_pooler", new=get_pooler_mock())
     pool = mocked_pooler._pool
-    execute1_fut = loop.create_future()
+    execute1_fut = event_loop.create_future()
     execute1_fut.set_result(None)
-    execute2_fut = loop.create_future()
-    pool.execute.side_effect = [execute1_fut, execute2_fut]
+    execute2_fut = event_loop.create_future()
+
+    execute_futs_iter = iter([execute1_fut, execute2_fut])
+
+    async def execute_side_effect(*args, **kwargs):
+        return await next(execute_futs_iter)
+
+    pool.execute.side_effect = execute_side_effect
 
     mocked_manager = mocker.patch.object(cl, "_manager", new=get_manager_mock())
     state = mocked_manager.get_state.return_value
-    state.masters = [
+    state._data.masters = [
         mock.NonCallableMock(addr=Address("1.2.3.4", 6666)),
         mock.NonCallableMock(addr=Address("1.2.3.4", 9999)),
     ]
 
     mocked_execute_retry_slowdown = mocker.patch.object(
-        cl, "_execute_retry_slowdown", new=asynctest.CoroutineMock()
+        cl, "_execute_retry_slowdown", new=create_async_mock()
     )
 
     with pytest.raises(asyncio.TimeoutError):

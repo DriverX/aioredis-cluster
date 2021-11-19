@@ -1,7 +1,6 @@
 import asyncio
-from unittest import mock
 
-import asynctest
+import mock
 import pytest
 
 from aioredis_cluster.pooler import Pooler
@@ -11,12 +10,12 @@ from aioredis_cluster.structs import Address
 def create_pool_mock():
     mocked = mock.NonCallableMock()
     mocked.closed = False
-    mocked.wait_closed = asynctest.CoroutineMock()
+    mocked.wait_closed = mock.AsyncMock()
     return mocked
 
 
-async def test_ensure_pool__identical_address(mocker):
-    mocked_create_pool = asynctest.CoroutineMock(
+async def test_ensure_pool__identical_address():
+    mocked_create_pool = mock.AsyncMock(
         return_value=create_pool_mock(),
     )
     pooler = Pooler(mocked_create_pool)
@@ -32,9 +31,9 @@ async def test_ensure_pool__identical_address(mocker):
     assert mocked_create_pool.call_count == 1
 
 
-async def test_ensure_pool__multiple(mocker):
+async def test_ensure_pool__multiple():
     pools = [object(), object(), object()]
-    mocked_create_pool = asynctest.CoroutineMock(side_effect=pools)
+    mocked_create_pool = mock.AsyncMock(side_effect=pools)
 
     pooler = Pooler(mocked_create_pool)
 
@@ -55,26 +54,26 @@ async def test_ensure_pool__multiple(mocker):
     )
 
 
-async def test_ensure_pool__only_one(mocker, loop):
+async def test_ensure_pool__only_one(event_loop):
     pools = {
         ("h1", 1): create_pool_mock(),
         ("h2", 2): create_pool_mock(),
     }
-    pool_creation_fut = loop.create_future()
+    pool_creation_fut = event_loop.create_future()
 
     async def create_pool_se(addr):
         nonlocal pool_creation_fut
         await pool_creation_fut
         return pools[addr]
 
-    mocked_create_pool = asynctest.CoroutineMock(side_effect=create_pool_se)
+    mocked_create_pool = mock.AsyncMock(side_effect=create_pool_se)
 
     pooler = Pooler(mocked_create_pool)
 
     tasks = []
     for i in range(10):
         for addr in pools.keys():
-            task = loop.create_task(pooler.ensure_pool(Address(addr[0], addr[1])))
+            task = event_loop.create_task(pooler.ensure_pool(Address(addr[0], addr[1])))
             tasks.append(task)
 
     pool_creation_fut.set_result(None)
@@ -87,9 +86,9 @@ async def test_ensure_pool__only_one(mocker, loop):
     assert mocked_create_pool.call_count == 2
 
 
-async def test_ensure_pool__error(mocker, loop):
+async def test_ensure_pool__error():
     pools = [RuntimeError(), object()]
-    mocked_create_pool = asynctest.CoroutineMock(side_effect=pools)
+    mocked_create_pool = mock.AsyncMock(side_effect=pools)
 
     pooler = Pooler(mocked_create_pool)
 
@@ -110,7 +109,7 @@ async def test_ensure_pool__error(mocker, loop):
 
 
 async def test_close__empty_pooler():
-    pooler = Pooler(asynctest.CoroutineMock())
+    pooler = Pooler(mock.AsyncMock())
     await pooler.close()
 
     assert pooler.closed is True
@@ -123,7 +122,7 @@ async def test_close__with_pools(mocker):
     ]
     addrs = [p[0] for p in addrs_pools]
     pools = [p[1] for p in addrs_pools]
-    mocked_create_pool = asynctest.CoroutineMock(side_effect=pools)
+    mocked_create_pool = mock.AsyncMock(side_effect=pools)
 
     pooler = Pooler(mocked_create_pool)
 
@@ -149,7 +148,7 @@ async def test_reap_pools(mocker):
     ]
     addrs = [p[0] for p in addrs_pools]
     pools = [p[1] for p in addrs_pools]
-    mocked_create_pool = asynctest.CoroutineMock(side_effect=pools)
+    mocked_create_pool = mock.AsyncMock(side_effect=pools)
 
     pooler = Pooler(mocked_create_pool, reap_frequency=-1)
 
@@ -176,7 +175,7 @@ async def test_reap_pools(mocker):
 
 
 async def test_reaper(mocker):
-    pooler = Pooler(asynctest.CoroutineMock(), reap_frequency=0)
+    pooler = Pooler(mock.AsyncMock(), reap_frequency=0)
 
     assert pooler._reap_calls == 0
 
@@ -194,7 +193,7 @@ async def test_reaper(mocker):
 
 
 async def test_add_pubsub_channel__no_addr():
-    pooler = Pooler(asynctest.CoroutineMock(), reap_frequency=-1)
+    pooler = Pooler(mock.AsyncMock(), reap_frequency=-1)
 
     addr = Address("h1", 1234)
     result = pooler.add_pubsub_channel(addr, b"channel", False)
@@ -203,7 +202,7 @@ async def test_add_pubsub_channel__no_addr():
 
 
 async def test_add_pubsub_channel():
-    pooler = Pooler(asynctest.CoroutineMock(return_value=create_pool_mock()), reap_frequency=-1)
+    pooler = Pooler(mock.AsyncMock(return_value=create_pool_mock()), reap_frequency=-1)
 
     addr1 = Address("h1", 1234)
     addr2 = Address("h2", 1234)
@@ -233,14 +232,14 @@ async def test_add_pubsub_channel():
 
 
 async def test_remove_pubsub_channel__no_addr():
-    pooler = Pooler(asynctest.CoroutineMock(), reap_frequency=-1)
+    pooler = Pooler(mock.AsyncMock(), reap_frequency=-1)
 
     result = pooler.remove_pubsub_channel(b"channel", False)
     assert result is False
 
 
 async def test_remove_pubsub_channel():
-    pooler = Pooler(asynctest.CoroutineMock(), reap_frequency=-1)
+    pooler = Pooler(mock.AsyncMock(), reap_frequency=-1)
 
     addr1 = Address("h1", 1234)
     addr2 = Address("h2", 1234)
@@ -268,7 +267,7 @@ async def test_remove_pubsub_channel():
 
 
 async def test_get_pubsub_addr():
-    pooler = Pooler(asynctest.CoroutineMock(), reap_frequency=-1)
+    pooler = Pooler(mock.AsyncMock(), reap_frequency=-1)
 
     addr1 = Address("h1", 1234)
     addr2 = Address("h2", 1234)
@@ -289,11 +288,11 @@ async def test_get_pubsub_addr():
     assert result4 == addr2
 
 
-async def test_ensure_pool__create_pubsub_addr_set(mocker):
+async def test_ensure_pool__create_pubsub_addr_set():
     addr1 = Address("h1", 1234)
     addr2 = Address("h2", 1234)
 
-    pooler = Pooler(asynctest.CoroutineMock(return_value=create_pool_mock()))
+    pooler = Pooler(mock.AsyncMock(return_value=create_pool_mock()))
 
     assert len(pooler._pubsub_addrs) == 0
 
@@ -312,8 +311,8 @@ async def test_ensure_pool__create_pubsub_addr_set(mocker):
     assert len(pooler._pubsub_addrs[addr1]) == 1
 
 
-async def test_reap_pools__cleanup_channels(mocker):
-    pooler = Pooler(asynctest.CoroutineMock(), reap_frequency=-1)
+async def test_reap_pools__cleanup_channels():
+    pooler = Pooler(mock.AsyncMock(), reap_frequency=-1)
 
     addr1 = Address("h1", 1)
     addr2 = Address("h2", 2)
@@ -341,7 +340,7 @@ async def test_close_only():
     pool1 = create_pool_mock()
     pool2 = create_pool_mock()
     pool3 = create_pool_mock()
-    mocked_create_pool = asynctest.CoroutineMock(side_effect=[pool1, pool2, pool3])
+    mocked_create_pool = mock.AsyncMock(side_effect=[pool1, pool2, pool3])
     pooler = Pooler(mocked_create_pool)
     addr1 = Address("h1", 1)
     addr2 = Address("h2", 2)

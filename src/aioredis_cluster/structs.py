@@ -16,12 +16,12 @@ class ClusterNode(NamedTuple):
     node_id: str
 
 
-@attr.s(slots=True)
+@attr.s(slots=True, auto_attribs=True)
 class ClusterSlot:
-    begin: int = attr.ib()
-    end: int = attr.ib()
-    master: ClusterNode = attr.ib()
-    replicas: List[ClusterNode] = attr.ib(factory=list)
+    begin: int
+    end: int
+    master: ClusterNode
+    # replicas: List[ClusterNode] = attr.ib(factory=list)
 
     def in_range(self, slot: int) -> bool:
         return self.begin <= slot <= self.end

@@ -3,13 +3,13 @@ import logging
 from collections import ChainMap
 from time import monotonic
 from types import MappingProxyType
-from typing import Any, AnyStr, Dict, List, Optional, Sequence, Iterable
+from typing import Any, AnyStr, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from aioredis import Redis, create_pool
 from aioredis.errors import ProtocolError, ReplyError
 from async_timeout import timeout as atimeout
 
-from aioredis_cluster.abc import AbcCluster, AbcPool
+from aioredis_cluster.abc import AbcChannel, AbcCluster, AbcPool
 from aioredis_cluster.command_info import UnknownCommandError, extract_keys
 from aioredis_cluster.commands import RedisCluster
 from aioredis_cluster.connection import ConnectionsPool
@@ -32,10 +32,10 @@ from aioredis_cluster.manager import ClusterManager, ClusterState
 from aioredis_cluster.pooler import Pooler
 from aioredis_cluster.structs import (
     Address,
+    ClusterNode,
     ExecuteContext,
     ExecuteFailProps,
     ExecuteProps,
-    ClusterNode,
 )
 from aioredis_cluster.typedef import (
     AioredisAddress,
@@ -335,19 +335,19 @@ class Cluster(AbcCluster):
         return sum(p.in_pubsub for p in self._pooler.pools())
 
     @property
-    def pubsub_channels(self) -> MappingProxyType:
+    def pubsub_channels(self) -> Mapping[str, AbcChannel]:
         """Read-only channels dict."""
 
         return MappingProxyType(ChainMap(*(p.pubsub_channels for p in self._pooler.pools())))
 
     @property
-    def pubsub_patterns(self):
+    def pubsub_patterns(self) -> Mapping[str, AbcChannel]:
         """Read-only patterns dict."""
 
         return MappingProxyType(ChainMap(*(p.pubsub_patterns for p in self._pooler.pools())))
 
     @property
-    def address(self):
+    def address(self) -> Tuple[str, int]:
         """Connection address."""
 
         addr = self._manager._startup_nodes[0]
@@ -382,13 +382,12 @@ class Cluster(AbcCluster):
 
             ctx.attempt += 1
 
-            masters = await self.get_all_master_nodes()
-
+            state = await self._manager.get_state()
             exec_fail_props = None
             execute_timeout = self._attempt_timeout
             pools = []
             try:
-                for node in masters:
+                for node in state._data.masters:
                     pool = await self._pooler.ensure_pool(node.addr)
                     start_exec_t = monotonic()
 
@@ -448,13 +447,31 @@ class Cluster(AbcCluster):
         slot = self.determine_slot(ensure_bytes(key), *iter_ensure_bytes(keys))
         state = await self._manager.get_state()
         node = state.slot_master(slot)
-
         return node
 
-    async def get_all_master_nodes(self) -> Iterable[ClusterNode]:
+    async def create_pool_by_addr(
+        self,
+        addr: Address,
+        *,
+        minsize: int = None,
+        maxsize: int = None,
+    ) -> Redis:
         state = await self._manager.get_state()
+        if state.has_addr(addr) is False:
+            raise ValueError(f"Unknown node address {addr}")
 
-        return state.masters
+        opts: Dict[str, Any] = {}
+        if minsize is not None:
+            opts["minsize"] = minsize
+        if maxsize is not None:
+            opts["maxsize"] = maxsize
+
+        pool = await self._create_pool((addr.host, addr.port), opts)
+
+        return self._commands_factory(pool)
+
+    async def get_cluster_state(self) -> ClusterState:
+        return await self._manager.get_state()
 
     async def _init(self) -> None:
         await self._manager._init()
@@ -651,7 +668,11 @@ class Cluster(AbcCluster):
     async def _create_default_pool(self, addr: AioredisAddress) -> AbcPool:
         return await self._create_pool(addr)
 
-    async def _create_pool(self, addr: AioredisAddress, opts: Dict = None) -> AbcPool:
+    async def _create_pool(
+        self,
+        addr: AioredisAddress,
+        opts: Dict[str, Any] = None,
+    ) -> AbcPool:
         if opts is None:
             opts = {}
 
@@ -667,33 +688,6 @@ class Cluster(AbcCluster):
         pool = await create_pool(addr, **{**default_opts, **opts})
 
         return pool
-
-    async def create_pool_by_addr(
-        self,
-        addr: Address,
-        *,
-        pool_cls: ConnectionsPool = None,
-        minsize: int = None,
-        maxsize: int = None,
-    ) -> Redis:
-        masters = await self.get_all_master_nodes()
-        addresses = [m.addr for m in masters]
-        if not any(a == addr for a in addresses):
-            raise ValueError(
-                "Unknown master %s:%s (available are %s)", addr.host, addr.port, addresses
-            )
-
-        opts: Dict[str, Any] = {}
-        if pool_cls is not None:
-            opts["pool_cls"] = pool_cls
-        if minsize is not None:
-            opts["minsize"] = minsize
-        if maxsize is not None:
-            opts["maxsize"] = maxsize
-
-        pool = await self._create_pool((addr.host, addr.port), opts)
-
-        return self._commands_factory(pool)
 
     async def _conn_execute(
         self,

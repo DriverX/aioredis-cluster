@@ -22,65 +22,67 @@ from aioredis_cluster.structs import Address, ClusterNode, ClusterSlot
 from aioredis_cluster.typedef import SlotsResponse
 
 
-__all__ = [
+__all__ = (
     "ClusterState",
     "ClusterManager",
     "slots_ranges",
     "create_cluster_state",
-]
+)
 
 
 def slots_ranges(slots: Sequence[ClusterSlot]) -> List[Tuple[int, int]]:
     return [(s.begin, s.end) for s in slots]
 
 
-class ClusterState:
-    __slots__ = (
-        "nodes",
-        "addrs",
-        "masters",
-        "replicas",
-        "slots",
-        "created_at",
-    )
+class _ClusterStateData:
+    """
+    ClusterStateData only for internals
+    """
 
     def __init__(self) -> None:
         self.nodes: Dict[Address, ClusterNode] = {}
         self.addrs: List[Address] = []
         self.masters: List[ClusterNode] = []
-        self.replicas: List[ClusterNode] = []
+        # master address -> list of replicas
+        self.replicas: Dict[Address, List[ClusterNode]] = {}
         self.slots: List[ClusterSlot] = []
         self.created_at = time.time()
+
+
+class ClusterState:
+    def __init__(self, data: _ClusterStateData):
+        self._data = data
 
     def __repr__(self) -> str:
         return "<{} {}>".format(type(self).__name__, self.repr_stats())
 
     def repr_stats(self) -> str:
         repr_parts = [
-            "created:{}".format(self.created_at),
-            "masters:{}".format(len(self.masters)),
-            "replicas:{}".format(len(self.replicas)),
-            "slot ranges:{}".format(len(self.slots)),
+            "created:{}".format(self._data.created_at),
+            "masters:{}".format(len(self._data.masters)),
+            "replicas:{}".format(len(self._data.replicas)),
+            "slot ranges:{}".format(len(self._data.slots)),
         ]
         return ", ".join(repr_parts)
 
     def find_slot(self, slot: int) -> ClusterSlot:
+        slots = self._data.slots
         # binary search
         lo = 0
-        hi = len(self.slots)
+        hi = len(slots)
         while lo < hi:
             mid = (lo + hi) // 2
-            cl_slot = self.slots[mid]
+            cl_slot = slots[mid]
 
             if cl_slot.end < slot:
                 lo = mid + 1
             else:
                 hi = mid
 
-        if lo >= len(self.slots):
+        if lo >= len(slots):
             raise UncoveredSlotError(slot)
 
-        cl_slot = self.slots[lo]
+        cl_slot = slots[lo]
         if not cl_slot.in_range(slot):
             raise UncoveredSlotError(slot)
 
@@ -92,43 +94,59 @@ class ClusterState:
     def slot_nodes(self, slot: int) -> List[ClusterNode]:
         cl_slot = self.find_slot(slot)
         nodes = [cl_slot.master]
-        nodes.extend(cl_slot.replicas)
+        replicas = self._data.replicas[cl_slot.master.addr]
+        nodes.extend(replicas)
         return nodes
 
     def random_slot_node(self, slot: int) -> ClusterNode:
         return random.choice(self.slot_nodes(slot))
 
     def random_slot_replica(self, slot: int) -> Optional[ClusterNode]:
-        replicas = self.find_slot(slot).replicas
+        cl_slot = self.find_slot(slot)
+        replicas = self._data.replicas[cl_slot.master.addr]
         if not replicas:
             return None
         return random.choice(replicas)
 
     def random_master(self) -> ClusterNode:
-        if not self.masters:
+        if not self._data.masters:
             raise ClusterStateError("no initialized masters")
 
-        return random.choice(self.masters)
+        return random.choice(self._data.masters)
 
     def random_node(self) -> ClusterNode:
-        if not self.addrs:
+        if not self._data.addrs:
             raise ClusterStateError("no initialized nodes")
 
-        addr = random.choice(self.addrs)
-        return self.nodes[addr]
+        addr = random.choice(self._data.addrs)
+        return self._data.nodes[addr]
+
+    def has_addr(self, addr: Address) -> bool:
+        return addr in self._data.nodes
+
+    def master_replicas(self, addr: Address) -> List[ClusterNode]:
+        try:
+            return list(self._data.replicas[addr])
+        except KeyError:
+            raise KeyError(f"No master with address {addr}")
+
+    def masters(self) -> List[ClusterNode]:
+        return list(self._data.masters)
 
 
 def create_cluster_state(slots_resp: SlotsResponse) -> ClusterState:
-    state = ClusterState()
+    state_data = _ClusterStateData()
 
     nodes: Dict[Address, ClusterNode] = {}
+    master_replicas: Dict[Address, List[ClusterNode]] = {}
     masters_set: Set[ClusterNode] = set()
     replicas_set: Set[ClusterNode] = set()
 
     for slot_spec in slots_resp:
+        master_node: Optional[ClusterNode] = None
         slot_begin = int(slot_spec[0])
         slot_end = int(slot_spec[1])
-        slot_nodes: List[ClusterNode] = []
+        node_num = 0
         for node_num, node_spec in enumerate(slot_spec[2:], 1):
             node_addr = Address(node_spec[0], int(node_spec[1]))
             if node_addr not in nodes:
@@ -137,25 +155,39 @@ def create_cluster_state(slots_resp: SlotsResponse) -> ClusterState:
             else:
                 node = nodes[node_addr]
 
-            if node_num == 1 and node not in masters_set:
+            # first element is always master
+            if node_num == 1:
                 masters_set.add(node)
+                master_node = node
+                if master_node.addr not in master_replicas:
+                    master_replicas[master_node.addr] = []
             elif node_num > 1 and node not in replicas_set:
+                assert master_node is not None
                 replicas_set.add(node)
-            slot_nodes.append(node)
+                master_replicas[master_node.addr].append(node)
 
-        state.slots.append(
-            ClusterSlot(
-                begin=slot_begin, end=slot_end, master=slot_nodes[0], replicas=slot_nodes[1:]
+        if node_num == 0:
+            logger.error(
+                "CLUSTER SLOTS returns slot range %r without master node",
+                (slot_begin, slot_end),
             )
-        )
+        else:
+            assert master_node is not None
+            state_data.slots.append(
+                ClusterSlot(
+                    begin=slot_begin,
+                    end=slot_end,
+                    master=master_node,
+                )
+            )
 
-    state.slots.sort(key=attrgetter("begin", "end"))
-    state.nodes = nodes
-    state.masters = list(masters_set)
-    state.replicas = list(replicas_set)
-    state.addrs = list(nodes.keys())
+    state_data.slots.sort(key=attrgetter("begin", "end"))
+    state_data.nodes = nodes
+    state_data.masters = list(masters_set)
+    state_data.replicas = master_replicas
+    state_data.addrs = list(nodes.keys())
 
-    return state
+    return ClusterState(state_data)
 
 
 class ClusterManager:
@@ -269,8 +301,8 @@ class ClusterManager:
             self._reload_event.clear()
 
     def _get_init_addrs(self, reload_id: int) -> List[Address]:
-        if self._follow_cluster and reload_id > 1 and self._state and self._state.addrs:
-            addrs = list(self._state.addrs)
+        if self._follow_cluster and reload_id > 1 and self._state and self._state._data.addrs:
+            addrs = list(self._state._data.addrs)
             random.shuffle(addrs)
         else:
             addrs = self._startup_nodes
@@ -284,7 +316,7 @@ class ClusterManager:
         state = create_cluster_state(slots_resp)
 
         # initialize connections pool for every master node in new state
-        for node in state.masters:
+        for node in state._data.masters:
             await self._pooler.ensure_pool(node.addr)
 
         # choose random master node and load command specs from node
@@ -306,10 +338,10 @@ class ClusterManager:
             "%d masters, "
             "%d replicas "
             "(reload_id=%d)",
-            len(state.slots),
-            len(state.nodes),
-            len(state.masters),
-            len(state.replicas),
+            len(state._data.slots),
+            len(state._data.nodes),
+            len(state._data.masters),
+            len(state._data.replicas),
             reload_id,
         )
 

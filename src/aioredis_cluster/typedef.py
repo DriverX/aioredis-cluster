@@ -1,13 +1,16 @@
-from typing import Awaitable, Callable, List, Tuple, Union
+from typing import Awaitable, Callable, List, Tuple, TypeVar, Union
 
 from aioredis.commands import Redis
 
 from aioredis_cluster.abc import AbcConnection, AbcPool
 
 
+TRedis = TypeVar("TRedis", bound=Redis)
+
+
 AioredisAddress = Union[str, Tuple[str, int]]
 SlotsResponse = List[List]
-CommandsFactory = Callable[[AbcConnection], Redis]
+CommandsFactory = Callable[[AbcConnection], TRedis]
 PoolerBatchCallback = Callable[[AbcPool], Awaitable[None]]
 PoolCreator = Callable[[AioredisAddress], Awaitable[AbcPool]]
 PubsubResponse = Tuple[bytes, bytes, int]
