@@ -88,11 +88,40 @@ async def create_redis_cluster(
     startup_nodes: Sequence[AioredisAddress],
     *,
     cluster_commands_factory: CommandsFactory = None,
-    **kwargs,
+    # failover options
+    retry_min_delay: float = None,
+    retry_max_delay: float = None,
+    max_attempts: int = None,
+    attempt_timeout: float = None,
+    # manager options
+    state_reload_interval: float = None,
+    follow_cluster: bool = None,
+    # pool options
+    idle_connection_timeout: float = None,
+    # node client options
+    password: str = None,
+    encoding: str = None,
+    pool_minsize: int = None,
+    pool_maxsize: int = None,
+    connect_timeout: float = None,
 ) -> RedisCluster:
     if cluster_commands_factory is None:
         cluster_commands_factory = RedisCluster
-    cluster = await create_cluster(startup_nodes, **kwargs)
+    cluster = await create_cluster(
+        startup_nodes,
+        retry_min_delay=retry_min_delay,
+        retry_max_delay=retry_max_delay,
+        max_attempts=max_attempts,
+        state_reload_interval=state_reload_interval,
+        follow_cluster=follow_cluster,
+        idle_connection_timeout=idle_connection_timeout,
+        password=password,
+        encoding=encoding,
+        pool_minsize=pool_minsize,
+        pool_maxsize=pool_maxsize,
+        connect_timeout=connect_timeout,
+        attempt_timeout=attempt_timeout,
+    )
     return cluster_commands_factory(cluster)
 
 

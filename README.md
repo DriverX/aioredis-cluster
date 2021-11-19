@@ -3,7 +3,7 @@ aioredis_cluster
 
 [![PyPI version](https://img.shields.io/pypi/v/aioredis-cluster)](https://pypi.org/project/aioredis-cluster/) ![aioredis-cluster CI/CD](https://github.com/DriverX/aioredis-cluster/workflows/aioredis-cluster%20CI/CD/badge.svg)
 
-Redis Cluster support for [aioredis](https://github.com/aio-libs/aioredis).
+Redis Cluster support for [aioredis](https://github.com/aio-libs/aioredis) (support only v1.x.x).
 
 Many implementation features were inspired by [go-redis](https://github.com/go-redis/redis) project.
 
@@ -11,9 +11,9 @@ Requirements
 ------------
 
 * [Python](https://www.python.org) 3.6.5+
-* [aioredis](https://pypi.org/project/aioredis/) 1.1+
-* [attrs](https://pypi.org/project/attrs/) 18.2+
+* [aioredis](https://pypi.org/project/aioredis/) >=1.1, <2
 * [async_timeout](https://pypi.org/project/async_timeout/)
+* [dataclasses](https://pypi.org/project/dataclasses/) (only for Python 3.6)
 
 Features
 --------

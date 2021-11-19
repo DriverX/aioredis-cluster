@@ -3,7 +3,11 @@ from functools import lru_cache
 import pytest
 
 from aioredis_cluster.errors import ClusterStateError, UncoveredSlotError
-from aioredis_cluster.manager import ClusterState, create_cluster_state
+from aioredis_cluster.manager import (
+    ClusterState,
+    _ClusterStateData,
+    create_cluster_state,
+)
 from aioredis_cluster.structs import Address
 
 from ._cluster_slots import SLOTS
@@ -59,21 +63,26 @@ def test_create_cluster_state():
         ]
     )
 
-    assert len(state.nodes) == 5
-    assert len(state.addrs) == 5
-    assert len(set(state.addrs)) == 5
-    assert len(state.masters) == 3
-    assert len(state.replicas) == 2
-    assert len(state.slots) == 7
-    assert sorted(state.addrs) == addrs
-    assert sorted(state.nodes.keys()) == addrs
-    assert get_nodes_addr(state.masters) == masters_addrs
-    assert get_nodes_addr(state.replicas) == replicas_addrs
-    assert get_slots_ranges(state.slots) == slot_ranges
+    state_data = state._data
+    assert len(state_data.nodes) == 5
+    assert len(state_data.addrs) == 5
+    assert len(set(state_data.addrs)) == 5
+    assert len(state_data.masters) == 3
+    assert len(state_data.replicas) == 3
+    assert sum(len(rs) for rs in state_data.replicas.values()) == 2
+    assert len(state_data.slots) == 7
+    assert sorted(state_data.addrs) == addrs
+    assert sorted(state_data.nodes.keys()) == addrs
+    assert get_nodes_addr(state_data.masters) == masters_addrs
+    assert get_nodes_addr([r for rs in state_data.replicas.values() for r in rs]) == replicas_addrs
+    assert get_slots_ranges(state_data.slots) == slot_ranges
+
+    state.repr_stats()
+    str(state)
 
 
 def test_find_slot__empty_state():
-    state = ClusterState()
+    state = ClusterState(_ClusterStateData())
 
     with pytest.raises(UncoveredSlotError):
         state.find_slot(0)
@@ -106,7 +115,7 @@ def test_find_slot(slot, expect):
 
 
 def test_slot_master__empty_state():
-    state = ClusterState()
+    state = ClusterState(_ClusterStateData())
 
     with pytest.raises(UncoveredSlotError):
         state.slot_master(0)
@@ -136,7 +145,7 @@ def test_slot_master(slot, expect):
 
 
 def test_random_master__empty_state():
-    state = ClusterState()
+    state = ClusterState(_ClusterStateData())
 
     with pytest.raises(ClusterStateError):
         state.random_master()
@@ -148,11 +157,11 @@ def test_random_master(mocker):
     mocker.patch(state.__module__ + ".random.choice", side_effect=lambda s: s[1])
     result = state.random_master()
 
-    assert result is state.masters[1]
+    assert result is state.masters()[1]
 
 
 def test_random_node__empty_state():
-    state = ClusterState()
+    state = ClusterState(_ClusterStateData())
 
     with pytest.raises(ClusterStateError):
         state.random_node()
@@ -164,4 +173,4 @@ def test_random_node(mocker):
     mocker.patch(state.__module__ + ".random.choice", side_effect=lambda s: s[1])
     result = state.random_node()
 
-    assert result is state.nodes[state.addrs[1]]
+    assert result is state._data.nodes[state._data.addrs[1]]

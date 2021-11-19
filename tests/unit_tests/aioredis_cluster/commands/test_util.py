@@ -3,7 +3,7 @@ import pytest
 from aioredis_cluster.commands.commands import blocked_for_cluster
 
 
-async def test_blocked_for_cluster(mocker, loop) -> None:
+async def test_blocked_for_cluster(mocker, event_loop) -> None:
     cluster_conn = object()
 
     def conn_is_cluster_se(conn):
@@ -24,7 +24,7 @@ async def test_blocked_for_cluster(mocker, loop) -> None:
 
         @blocked_for_cluster
         def fut_method(self, param: str):
-            fut = loop.create_future()
+            fut = event_loop.create_future()
             fut.set_result(None)
             return fut
 

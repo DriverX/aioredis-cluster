@@ -1,4 +1,6 @@
+import dataclasses
 import random
+import socket
 from asyncio.futures import _chain_future  # type: ignore
 from typing import (
     Dict,
@@ -11,7 +13,6 @@ from typing import (
     Union,
 )
 
-import attr
 from aioredis.util import _converters, decode
 
 
@@ -27,6 +28,7 @@ __all__ = [
     "RedirInfo",
     "parse_moved_response_error",
     "retry_backoff",
+    "unused_port",
 ]
 
 _T = TypeVar("_T")
@@ -152,12 +154,12 @@ def parse_cluster_nodes(resp: str) -> List[Dict]:
     return [parse_cluster_node_line(line) for line in resp.strip().splitlines()]
 
 
-@attr.s(slots=True, frozen=True)
+@dataclasses.dataclass
 class RedirInfo:
-    slot_id: int = attr.ib()
-    host: str = attr.ib()
-    port: int = attr.ib()
-    ask: bool = attr.ib(repr=False)
+    slot_id: int
+    host: str
+    port: int
+    ask: bool
 
 
 def parse_moved_response_error(msg: str) -> RedirInfo:
@@ -185,3 +187,10 @@ def retry_backoff(retry: int, min_delay: float, max_delay: float) -> float:
         delay = max_delay
 
     return random.uniform(0, delay)
+
+
+def unused_port() -> int:
+    """Return a port that is unused on the current host."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return int(s.getsockname()[1])

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from typing import List, Tuple, Union
@@ -5,6 +6,7 @@ from typing import List, Tuple, Union
 import pytest
 
 from aioredis_cluster import create_cluster, create_redis_cluster
+from aioredis_cluster.util import unused_port as _unused_port
 
 
 def get_startup_nodes(nodes_str: str) -> List[Union[str, Tuple[str, int]]]:
@@ -25,8 +27,24 @@ def get_startup_nodes(nodes_str: str) -> List[Union[str, Tuple[str, int]]]:
 STARTUP_NODES = tuple(get_startup_nodes(os.environ.get("REDIS_CLUSTER_STARTUP_NODES", "").strip()))
 
 
+def pytest_runtest_setup(item):
+    if not STARTUP_NODES:
+        pytest.skip("Environment variable REDIS_CLUSTER_STARTUP_NODES is not defined")
+
+
+def pytest_collection_modifyitems(items):
+    for item in items:
+        if not item.get_closest_marker("asyncio") and asyncio.iscoroutinefunction(item.function):
+            item.add_marker(pytest.mark.asyncio)
+
+
 @pytest.fixture
-async def redis_cluster(loop):
+def unused_port():
+    return _unused_port
+
+
+@pytest.fixture
+async def redis_cluster():
     _client = None
     _client_kwargs = None
 
@@ -53,7 +71,7 @@ async def redis_cluster(loop):
 
 
 @pytest.fixture
-async def cluster(loop):
+async def cluster():
     _client = None
     _client_kwargs = None
 
@@ -77,8 +95,3 @@ async def cluster(loop):
             await _client.wait_closed()
         except Exception:
             logging.exception("Unable to cleanup redis cluster nodes")
-
-
-def pytest_runtest_setup(item):
-    if not STARTUP_NODES:
-        pytest.skip("Environment variable REDIS_CLUSTER_STARTUP_NODES is not defined")
