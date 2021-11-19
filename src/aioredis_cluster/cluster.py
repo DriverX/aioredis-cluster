@@ -413,6 +413,9 @@ class Cluster(AbcCluster):
 
     async def keys_master(self, key: AnyStr, *keys: AnyStr) -> Redis:
         self._check_closed()
+
+        slot = self.determine_slot(ensure_bytes(key), *iter_ensure_bytes(keys))
+
         ctx = self._make_exec_context((b"EXISTS", key), {})
 
         exec_fail_props: Optional[ExecuteFailProps] = None
@@ -421,7 +424,8 @@ class Cluster(AbcCluster):
 
             ctx.attempt += 1
 
-            node = await self.get_master_node_by_keys(key, *keys)
+            state = await self._manager.get_state()
+            node = state.slot_master(slot)
 
             exec_fail_props = None
             try:
