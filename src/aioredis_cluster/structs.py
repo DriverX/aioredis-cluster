@@ -1,6 +1,5 @@
+import dataclasses
 from typing import Dict, List, NamedTuple, Optional, Sequence, Tuple
-
-import attr
 
 
 class Address(NamedTuple):
@@ -16,7 +15,7 @@ class ClusterNode(NamedTuple):
     node_id: str
 
 
-@attr.s(slots=True, auto_attribs=True)
+@dataclasses.dataclass
 class ClusterSlot:
     begin: int
     end: int
@@ -68,14 +67,14 @@ class ExecuteContext:
         return "<ExecuteContext {}>".format(" ".join(f"{k}={v}" for k, v in info))
 
 
-@attr.s(slots=True, kw_only=True)
+@dataclasses.dataclass
 class ExecuteProps:
-    node_addr: Address = attr.ib(init=False)
-    reload_state_required: bool = attr.ib(default=False)
-    asking: bool = attr.ib(default=False)
+    node_addr: Address = dataclasses.field(init=False)
+    reload_state_required: bool = False
+    asking: bool = False
 
 
-@attr.s(slots=True, kw_only=True)
+@dataclasses.dataclass
 class ExecuteFailProps:
-    node_addr: Address = attr.ib()
-    error: Exception = attr.ib()
+    node_addr: Address
+    error: Exception

@@ -1,7 +1,6 @@
 import asyncio
+import dataclasses
 from typing import Dict, List, NamedTuple, Optional, Sequence, Set
-
-import attr
 
 from aioredis_cluster.abc import AbcPool
 from aioredis_cluster.log import logger
@@ -15,7 +14,7 @@ __all__ = [
 ]
 
 
-@attr.dataclass(slots=True)
+@dataclasses.dataclass
 class PoolHolder:
     pool: AbcPool
     generation: int

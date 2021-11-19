@@ -1,6 +1,5 @@
+import dataclasses
 from typing import AnyStr, FrozenSet, List, NoReturn, Sequence
-
-import attr
 
 from aioredis_cluster.util import ensure_str
 
@@ -38,14 +37,14 @@ def _raise_wrong_num_of_arguments(cmd) -> NoReturn:
     raise InvalidCommandError(f"Wrong number of arguments for {cmd.name!r} command")
 
 
-@attr.s(slots=True, frozen=True)
+@dataclasses.dataclass
 class CommandInfo:
-    name: str = attr.ib()
-    arity: int = attr.ib()
-    flags: FrozenSet[str] = attr.ib()
-    first_key_arg: int = attr.ib()
-    last_key_arg: int = attr.ib()
-    key_args_step: int = attr.ib()
+    name: str
+    arity: int
+    flags: FrozenSet[str]
+    first_key_arg: int
+    last_key_arg: int
+    key_args_step: int
 
     def is_readonly(self) -> bool:
         return "readonly" in self.flags

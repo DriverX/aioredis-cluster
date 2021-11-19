@@ -9,7 +9,7 @@ from setuptools import find_packages, setup
 def get_requires():
     requires = [
         "aioredis>=1.1.0, <2.0.0",
-        "attrs>=18.2.0",
+        "dataclasses; python_version < '3.7'",
         "async-timeout",
     ]
     if platform.python_implementation() == "CPython":
@@ -87,6 +87,7 @@ setup(
             # "pytest-aiohttp",
             "pytest-mock",
             "pytest-asyncio",
+            "types-dataclasses; python_version < '3.7'",
         ],
     },
 )
