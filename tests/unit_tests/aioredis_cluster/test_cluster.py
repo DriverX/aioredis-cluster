@@ -361,7 +361,6 @@ async def test_execute__success_several_problem_retry(mocker):
     mocked_pooler = mocker.patch.object(cl, "_pooler", new=get_pooler_mock())
     conn = mocked_pooler._conn
     pool = mocked_pooler._pool
-    print(pool)
 
     pool_execute_count = 0
 
