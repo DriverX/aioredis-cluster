@@ -64,6 +64,12 @@ class RedisCluster(ClusterCommandsMixin, Redis):
 
         return None
 
+    @property
+    def cluster_connection(self) -> AbcCluster:
+        self._only_for_cluster()
+
+        return cast(AbcCluster, self.connection)
+
     def _only_for_cluster(self):
         if not conn_is_cluster(self.connection):
             raise RuntimeError("Connection is not a Cluster instance")
