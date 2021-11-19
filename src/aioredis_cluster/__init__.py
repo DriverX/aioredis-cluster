@@ -1,5 +1,6 @@
 from ._version import __version__
 from .cluster import Cluster
+from .cluster_state import ClusterState
 from .commands import RedisCluster
 from .errors import (
     AskError,
@@ -14,7 +15,6 @@ from .errors import (
     UncoveredSlotError,
 )
 from .factory import create_cluster, create_redis_cluster, is_redis_cluster
-from .manager import ClusterState
 from .structs import Address, ClusterNode
 
 
