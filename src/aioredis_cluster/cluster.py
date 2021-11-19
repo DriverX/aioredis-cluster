@@ -11,6 +11,7 @@ from async_timeout import timeout as atimeout
 
 from aioredis_cluster.abc import AbcChannel, AbcCluster, AbcPool
 from aioredis_cluster.command_info import UnknownCommandError, extract_keys
+from aioredis_cluster.commands import RedisCluster
 from aioredis_cluster.connection import ConnectionsPool
 from aioredis_cluster.crc import key_slot
 from aioredis_cluster.errors import (
@@ -146,7 +147,7 @@ class Cluster(AbcCluster):
         self._pool_maxsize = pool_maxsize
 
         if commands_factory is None:
-            commands_factory = Redis
+            commands_factory = RedisCluster
 
         self._commands_factory = commands_factory
 
