@@ -2,10 +2,10 @@ import pytest
 
 from aioredis_cluster.command_info import (
     InvalidCommandError,
-    UnknownCommandError,
     default_registry,
     extract_keys,
 )
+from aioredis_cluster.util import ensure_str
 
 
 registry = default_registry
@@ -92,13 +92,14 @@ def test_registry_get_info__is_readonly(cmd_name, expect):
 
 
 @pytest.mark.parametrize(
-    "cmd_name, expect",
+    "cmd_name",
     [
-        ("GEET", UnknownCommandError),
-        ("", UnknownCommandError),
-        (b"LRANGE ", UnknownCommandError),
+        "GEET",
+        "",
+        b"LRANGE ",
     ],
 )
-def test_registry_get_info__error(cmd_name, expect):
-    with pytest.raises(expect):
-        registry.get_info(cmd_name)
+def test_registry_get_info__error(cmd_name):
+    cmd_info = registry.get_info(cmd_name)
+    assert cmd_info.name == ensure_str(cmd_name).upper()
+    assert cmd_info.is_unknown() is True

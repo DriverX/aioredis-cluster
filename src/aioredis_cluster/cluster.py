@@ -10,7 +10,12 @@ from aioredis.errors import ProtocolError, ReplyError
 from async_timeout import timeout as atimeout
 
 from aioredis_cluster.abc import AbcChannel, AbcCluster, AbcPool
-from aioredis_cluster.command_info import UnknownCommandError, extract_keys
+from aioredis_cluster.command_exec import (
+    ExecuteContext,
+    ExecuteFailProps,
+    ExecuteProps,
+)
+from aioredis_cluster.command_info import CommandInfo, extract_keys
 from aioredis_cluster.commands import RedisCluster
 from aioredis_cluster.connection import ConnectionsPool
 from aioredis_cluster.crc import key_slot
@@ -30,13 +35,7 @@ from aioredis_cluster.errors import (
 from aioredis_cluster.log import logger
 from aioredis_cluster.manager import ClusterManager, ClusterState
 from aioredis_cluster.pooler import Pooler
-from aioredis_cluster.structs import (
-    Address,
-    ClusterNode,
-    ExecuteContext,
-    ExecuteFailProps,
-    ExecuteProps,
-)
+from aioredis_cluster.structs import Address, ClusterNode
 from aioredis_cluster.typedef import (
     AioredisAddress,
     CommandsFactory,
@@ -184,7 +183,7 @@ class Cluster(AbcCluster):
 
         ctx = self._make_exec_context(args, kwargs)
 
-        keys = self._extract_command_keys(ctx.cmd_name, ctx.cmd)
+        keys = self._extract_command_keys(ctx.cmd_info, ctx.cmd)
         if keys:
             ctx.slot = self.determine_slot(*keys)
             if logger.isEnabledFor(logging.DEBUG):
@@ -487,22 +486,27 @@ class Cluster(AbcCluster):
         if self._closed:
             raise ClusterClosedError()
 
-    def _make_exec_context(self, args, kwargs) -> ExecuteContext:
+    def _make_exec_context(self, args: Sequence, kwargs) -> ExecuteContext:
+        cmd_info = self._manager.commands.get_info(args[0])
+        if cmd_info.is_unknown():
+            logger.warning("No info found for command %r", cmd_info.name)
         ctx = ExecuteContext(
             cmd=list(iter_ensure_bytes(args)),
+            cmd_info=cmd_info,
             kwargs=kwargs,
             max_attempts=self._max_attempts,
         )
         return ctx
 
-    def _extract_command_keys(self, name: str, command: Sequence[bytes]) -> List[bytes]:
-        try:
-            cmd_info = self._manager.commands.get_info(name)
-            keys = extract_keys(cmd_info, command)
-        except UnknownCommandError as e:
-            logger.warning("No info found for command %r", e.command)
+    def _extract_command_keys(
+        self,
+        cmd_info: CommandInfo,
+        command_seq: Sequence[bytes],
+    ) -> List[bytes]:
+        if cmd_info.is_unknown():
             keys = []
-
+        else:
+            keys = extract_keys(cmd_info, command_seq)
         return keys
 
     async def _execute_retry_slowdown(self, attempt: int, max_attempts: int) -> None:
@@ -583,6 +587,15 @@ class Cluster(AbcCluster):
             logger.debug("%sExecute %r on %s", attempt_log_prefix, ctx.cmd_for_repr(), node_addr)
 
         pool = await self._pooler.ensure_pool(node_addr)
+
+        pool_size = pool.size
+        if pool_size >= pool.maxsize and pool.freesize == 0:
+            logger.warning(
+                "ConnectionPool to %s size limit reached %r",
+                node_addr,
+                pool,
+            )
+
         if props.asking:
             logger.info("Send ASKING to %s for command %r", node_addr, ctx.cmd_name)
 
@@ -594,12 +607,20 @@ class Cluster(AbcCluster):
                 asking=True,
             )
         else:
-            result = await self._pool_execute(
-                pool,
-                ctx.cmd,
-                ctx.kwargs,
-                timeout=self._attempt_timeout,
-            )
+            if ctx.cmd_info.is_blocking():
+                result = await self._conn_execute(
+                    pool,
+                    ctx.cmd,
+                    ctx.kwargs,
+                    timeout=self._attempt_timeout,
+                )
+            else:
+                result = await self._pool_execute(
+                    pool,
+                    ctx.cmd,
+                    ctx.kwargs,
+                    timeout=self._attempt_timeout,
+                )
 
         return result
 
@@ -639,7 +660,7 @@ class Cluster(AbcCluster):
             logger.warning("Reply error: %s", e)
             raise
         except asyncio.TimeoutError:
-            is_readonly = self._command_is_readonly(ctx.cmd_name)
+            is_readonly = ctx.cmd_info.is_readonly()
             if is_readonly:
                 logger.warning(
                     "Read-Only command %s to %s is timed out", ctx.cmd_name, fail_props.node_addr
@@ -744,13 +765,3 @@ class Cluster(AbcCluster):
         async with atimeout(timeout):
             result = await pool.execute(*args, **kwargs)
         return result
-
-    def _command_is_readonly(self, cmd_name: str) -> bool:
-        readonly = False
-        try:
-            cmd_info = self._manager.commands.get_info(cmd_name)
-            readonly = cmd_info.is_readonly()
-        except UnknownCommandError:
-            logger.warning("Unknown command %s, consider is non-idempotent", cmd_name)
-
-        return readonly

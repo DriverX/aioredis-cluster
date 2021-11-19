@@ -43,6 +43,10 @@ def get_pooler_mock():
     pool.execute = create_async_mock()
     pool.auth = create_async_mock()
     pool.acquire = create_async_mock(return_value=conn)
+    pool.maxsize = 10
+    pool.minsize = 1
+    pool.size = 1
+    pool.freesize = 0
 
     conn_acquirer = mock.MagicMock()
     conn_acquirer.__aenter__ = create_async_mock(return_value=conn)

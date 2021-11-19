@@ -3,30 +3,24 @@ from typing import AnyStr, FrozenSet, List, NoReturn, Sequence
 
 from aioredis_cluster.util import ensure_str
 
-from .commands import COMMANDS
+from .commands import BLOCKING_COMMANDS, COMMANDS
 
 
 __all__ = [
     "COMMANDS",
+    "BLOCKING_COMMANDS",
     "CommandsRegistry",
     "CommandInfo",
     "CommandInfoError",
-    "UnknownCommandError",
     "InvalidCommandError",
     "extract_keys",
     "create_registry",
+    "unknown_command",
 ]
 
 
 class CommandInfoError(Exception):
     pass
-
-
-class UnknownCommandError(CommandInfoError):
-    def __init__(self, command: str) -> None:
-        super().__init__(command)
-
-        self.command = command
 
 
 class InvalidCommandError(CommandInfoError):
@@ -46,8 +40,16 @@ class CommandInfo:
     last_key_arg: int
     key_args_step: int
 
+    _is_unknown: bool = False
+
     def is_readonly(self) -> bool:
         return "readonly" in self.flags
+
+    def is_blocking(self) -> bool:
+        return self.name in BLOCKING_COMMANDS
+
+    def is_unknown(self) -> bool:
+        return self._is_unknown
 
 
 class CommandsRegistry:
@@ -60,7 +62,7 @@ class CommandsRegistry:
         try:
             info = self._commands[cmd_name]
         except KeyError:
-            raise UnknownCommandError(cmd_name) from None
+            return unknown_command(cmd_name)
 
         return info
 
@@ -138,6 +140,18 @@ def create_registry(raw_commands: Sequence[List]) -> CommandsRegistry:
         cmds.append(cmd)
 
     return CommandsRegistry(cmds)
+
+
+def unknown_command(name: str) -> CommandInfo:
+    return CommandInfo(
+        name=name,
+        arity=0,
+        flags=frozenset(),
+        first_key_arg=0,
+        last_key_arg=0,
+        key_args_step=0,
+        _is_unknown=True,
+    )
 
 
 default_registry = create_registry(COMMANDS)
