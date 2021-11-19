@@ -1,4 +1,5 @@
 import random
+import socket
 from asyncio.futures import _chain_future  # type: ignore
 from typing import (
     Dict,
@@ -27,6 +28,7 @@ __all__ = [
     "RedirInfo",
     "parse_moved_response_error",
     "retry_backoff",
+    "unused_port",
 ]
 
 _T = TypeVar("_T")
@@ -185,3 +187,10 @@ def retry_backoff(retry: int, min_delay: float, max_delay: float) -> float:
         delay = max_delay
 
     return random.uniform(0, delay)
+
+
+def unused_port() -> int:
+    """Return a port that is unused on the current host."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return int(s.getsockname()[1])
