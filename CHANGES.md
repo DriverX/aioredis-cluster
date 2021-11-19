@@ -13,6 +13,7 @@ Changes
 * drop `pytest-aiohttp` plugin for tests
 * add `pytest-asyncio` dependency for tests
 * switch `asynctest` -> `mock` library for aio tests
+* drop `attrs` dependency. For Python 3.6 you need install `dataclasses`
 
 1.5.2 (2020-12-14)
 ------------------
