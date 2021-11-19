@@ -105,7 +105,7 @@ class ClusterCommandsMixin:
         try:
             config_epoch = int(config_epoch)
         except ValueError:
-            raise TypeError("Expected slot to be of type int, got {}".format(type(config_epoch)))
+            raise TypeError(f"Expected slot to be of type int, got {type(config_epoch)}")
 
         fut = self.execute(b"CLUSTER", b"SET-CONFIG-EPOCH", config_epoch)
         return wait_ok(fut)

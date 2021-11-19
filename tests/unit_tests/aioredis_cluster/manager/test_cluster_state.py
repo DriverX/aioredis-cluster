@@ -77,6 +77,9 @@ def test_create_cluster_state():
     assert get_nodes_addr([r for rs in state_data.replicas.values() for r in rs]) == replicas_addrs
     assert get_slots_ranges(state_data.slots) == slot_ranges
 
+    state.repr_stats()
+    str(state)
+
 
 def test_find_slot__empty_state():
     state = ClusterState(_ClusterStateData())

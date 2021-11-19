@@ -10,10 +10,11 @@ from aioredis_cluster.abc import AbcCluster
 from .cluster import ClusterCommandsMixin
 
 
-__all__ = [
+__all__ = (
+    "Redis",
     "RedisCluster",
     "conn_is_cluster",
-]
+)
 
 _T = TypeVar("_T")
 

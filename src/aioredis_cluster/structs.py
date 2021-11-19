@@ -21,7 +21,6 @@ class ClusterSlot:
     begin: int
     end: int
     master: ClusterNode
-    # replicas: List[ClusterNode] = attr.ib(factory=list)
 
     def in_range(self, slot: int) -> bool:
         return self.begin <= slot <= self.end

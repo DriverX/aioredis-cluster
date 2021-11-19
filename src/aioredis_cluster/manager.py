@@ -54,14 +54,15 @@ class ClusterState:
         self._data = data
 
     def __repr__(self) -> str:
-        return "<{} {}>".format(type(self).__name__, self.repr_stats())
+        return f"<{type(self).__name__} {self.repr_stats()}>"
 
     def repr_stats(self) -> str:
+        num_of_replicas = sum(len(rs) for rs in self._data.replicas.values())
         repr_parts = [
-            "created:{}".format(self._data.created_at),
-            "masters:{}".format(len(self._data.masters)),
-            "replicas:{}".format(len(self._data.replicas)),
-            "slot ranges:{}".format(len(self._data.slots)),
+            f"created:{self._data.created_at}",
+            f"masters:{len(self._data.masters)}",
+            f"replicas:{num_of_replicas}",
+            f"slot ranges:{len(self._data.slots)}",
         ]
         return ", ".join(repr_parts)
 

@@ -11,7 +11,6 @@ from async_timeout import timeout as atimeout
 
 from aioredis_cluster.abc import AbcChannel, AbcCluster, AbcPool
 from aioredis_cluster.command_info import UnknownCommandError, extract_keys
-from aioredis_cluster.commands import RedisCluster
 from aioredis_cluster.connection import ConnectionsPool
 from aioredis_cluster.crc import key_slot
 from aioredis_cluster.errors import (
@@ -49,10 +48,10 @@ from aioredis_cluster.util import (
 )
 
 
-__all__ = [
+__all__ = (
     "AbcCluster",
     "Cluster",
-]
+)
 
 
 class Cluster(AbcCluster):
@@ -147,7 +146,7 @@ class Cluster(AbcCluster):
         self._pool_maxsize = pool_maxsize
 
         if commands_factory is None:
-            commands_factory = RedisCluster
+            commands_factory = Redis
 
         self._commands_factory = commands_factory
 
@@ -177,8 +176,7 @@ class Cluster(AbcCluster):
         state_stats = ""
         if self._manager._state:
             state_stats = self._manager._state.repr_stats()
-
-        return "<{} {}>".format(type(self).__name__, state_stats)
+        return f"<{type(self).__name__} {state_stats}>"
 
     async def execute(self, *args, **kwargs) -> Any:
         """Execute redis command."""
