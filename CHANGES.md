@@ -2,7 +2,7 @@ Changes
 =======
 
 
-1.6.0 (2021-11-xx)
+1.6.0 (2021-11-20)
 ------------------
 
 * make public `Address`, `ClusterNode` and `ClusterState` structs. Available by import `from aioredis_cluster import`
