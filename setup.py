@@ -9,7 +9,7 @@ from setuptools import find_packages, setup
 def get_requires():
     requires = [
         "aioredis>=1.1.0, <2.0.0",
-        "attrs>=18.2.0",
+        "dataclasses; python_version < '3.7'",
         "async-timeout",
     ]
     if platform.python_implementation() == "CPython":
@@ -78,14 +78,16 @@ setup(
         "devel": [
             "flake8",
             "mypy",
+            "isort>=5.0.0, <6.0.0",
+            "mock>=4.0.0",
+            "black==21.10b0",
             "coverage",
             "pytest",
             "pytest-cov",
-            "isort>=5.0.0, <6.0.0",
-            "pytest-aiohttp",
+            # "pytest-aiohttp",
             "pytest-mock",
-            "asynctest",
-            "black==20.8b1",
+            "pytest-asyncio",
+            "types-dataclasses; python_version < '3.7'",
         ],
     },
 )

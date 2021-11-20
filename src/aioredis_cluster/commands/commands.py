@@ -10,10 +10,11 @@ from aioredis_cluster.abc import AbcCluster
 from .cluster import ClusterCommandsMixin
 
 
-__all__ = [
+__all__ = (
+    "Redis",
     "RedisCluster",
     "conn_is_cluster",
-]
+)
 
 _T = TypeVar("_T")
 
@@ -62,6 +63,12 @@ class RedisCluster(ClusterCommandsMixin, Redis):
                 return result
 
         return None
+
+    @property
+    def cluster_connection(self) -> AbcCluster:
+        self._only_for_cluster()
+
+        return cast(AbcCluster, self.connection)
 
     def _only_for_cluster(self):
         if not conn_is_cluster(self.connection):

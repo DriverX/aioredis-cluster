@@ -1,21 +1,25 @@
+import dataclasses
 from typing import AnyStr, FrozenSet, List, NoReturn, Sequence
-
-import attr
 
 from aioredis_cluster.util import ensure_str
 
-from .commands import COMMANDS
+from .commands import (
+    BLOCKING_COMMANDS,
+    COMMANDS,
+    EVAL_COMMANDS,
+    ZUNION_COMMANDS,
+    ZUNIONSTORE_COMMANDS,
+)
 
 
 __all__ = [
-    "COMMANDS",
     "CommandsRegistry",
     "CommandInfo",
     "CommandInfoError",
-    "UnknownCommandError",
     "InvalidCommandError",
     "extract_keys",
     "create_registry",
+    "unknown_command",
 ]
 
 
@@ -23,32 +27,33 @@ class CommandInfoError(Exception):
     pass
 
 
-class UnknownCommandError(CommandInfoError):
-    def __init__(self, command: str) -> None:
-        super().__init__(command)
-
-        self.command = command
-
-
 class InvalidCommandError(CommandInfoError):
     pass
 
 
-def _raise_wrong_num_of_arguments(cmd) -> NoReturn:
+def _raise_wrong_num_of_arguments(cmd: "CommandInfo") -> NoReturn:
     raise InvalidCommandError(f"Wrong number of arguments for {cmd.name!r} command")
 
 
-@attr.s(slots=True, frozen=True)
+@dataclasses.dataclass
 class CommandInfo:
-    name: str = attr.ib()
-    arity: int = attr.ib()
-    flags: FrozenSet[str] = attr.ib()
-    first_key_arg: int = attr.ib()
-    last_key_arg: int = attr.ib()
-    key_args_step: int = attr.ib()
+    name: str
+    arity: int
+    flags: FrozenSet[str]
+    first_key_arg: int
+    last_key_arg: int
+    key_args_step: int
+
+    _is_unknown: bool = False
 
     def is_readonly(self) -> bool:
         return "readonly" in self.flags
+
+    def is_blocking(self) -> bool:
+        return self.name in BLOCKING_COMMANDS
+
+    def is_unknown(self) -> bool:
+        return self._is_unknown
 
 
 class CommandsRegistry:
@@ -61,7 +66,7 @@ class CommandsRegistry:
         try:
             info = self._commands[cmd_name]
         except KeyError:
-            raise UnknownCommandError(cmd_name) from None
+            return unknown_command(cmd_name)
 
         return info
 
@@ -75,8 +80,8 @@ def _extract_keys_general(info: CommandInfo, exec_command: Sequence[bytes]) -> L
     if info.first_key_arg <= 0:
         return []
 
-    if info.last_key_arg == -1:
-        last_key_arg = len(exec_command) - 1
+    if info.last_key_arg < 0:
+        last_key_arg = len(exec_command) + info.last_key_arg
     else:
         last_key_arg = info.last_key_arg
 
@@ -99,6 +104,32 @@ def _extract_keys_eval(info: CommandInfo, exec_command: Sequence[bytes]) -> List
     return list(keys)
 
 
+def _extract_keys_zunion(
+    info: CommandInfo,
+    exec_command: Sequence[bytes],
+    store: bool,
+) -> List[bytes]:
+    keys: List[bytes] = []
+    if store:
+        keys.append(exec_command[1])
+        # dest key + numkeys arguments
+        num_of_keys = int(exec_command[2]) + 1
+        first_key_arg = 3
+        last_key_arg = first_key_arg + num_of_keys - 2
+    else:
+        num_of_keys = int(exec_command[1])
+        first_key_arg = 2
+        last_key_arg = first_key_arg + num_of_keys - 1
+
+    if num_of_keys == 0:
+        _raise_wrong_num_of_arguments(info)
+
+    keys.extend(exec_command[first_key_arg : last_key_arg + 1])
+    if len(keys) != num_of_keys:
+        _raise_wrong_num_of_arguments(info)
+    return keys
+
+
 def extract_keys(info: CommandInfo, exec_command: Sequence[bytes]) -> List[bytes]:
     if len(exec_command) < 1:
         raise ValueError("Execute command is empty")
@@ -111,8 +142,12 @@ def extract_keys(info: CommandInfo, exec_command: Sequence[bytes]) -> List[bytes
         _raise_wrong_num_of_arguments(info)
 
     # special parsing for command
-    if info.name in {"EVAL", "EVALSHA"}:
+    if info.name in EVAL_COMMANDS:
         keys = _extract_keys_eval(info, exec_command)
+    elif info.name in ZUNION_COMMANDS:
+        keys = _extract_keys_zunion(info, exec_command, False)
+    elif info.name in ZUNIONSTORE_COMMANDS:
+        keys = _extract_keys_zunion(info, exec_command, True)
     else:
         keys = _extract_keys_general(info, exec_command)
 
@@ -139,6 +174,18 @@ def create_registry(raw_commands: Sequence[List]) -> CommandsRegistry:
         cmds.append(cmd)
 
     return CommandsRegistry(cmds)
+
+
+def unknown_command(name: str) -> CommandInfo:
+    return CommandInfo(
+        name=name,
+        arity=0,
+        flags=frozenset(),
+        first_key_arg=0,
+        last_key_arg=0,
+        key_args_step=0,
+        _is_unknown=True,
+    )
 
 
 default_registry = create_registry(COMMANDS)

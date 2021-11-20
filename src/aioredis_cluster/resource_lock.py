@@ -1,7 +1,6 @@
 import asyncio
+import dataclasses
 from typing import AsyncContextManager, Dict, Generic, TypeVar
-
-import attr
 
 
 __all__ = [
@@ -11,10 +10,10 @@ __all__ = [
 _T = TypeVar("_T")
 
 
-@attr.s(slots=True)
+@dataclasses.dataclass
 class LockAndCount:
-    lock: asyncio.Lock = attr.ib()
-    acquires: int = attr.ib()
+    lock: asyncio.Lock
+    acquires: int
 
 
 class ResourceLock(Generic[_T]):

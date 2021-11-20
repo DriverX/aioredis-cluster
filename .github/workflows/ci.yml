@@ -6,6 +6,10 @@ on:
       - master
     tags:
       - v*
+  pull_request:
+    branches:
+      - master
+
 
 jobs:
 
@@ -47,9 +51,9 @@ jobs:
     strategy:
       matrix:
         redis-version:
-          - '3.2.12'
-          - '4.0.14'
           - '5.0.9'
+          - '6.0.12'
+          - '6.2.1'
 
     services:
       redis:

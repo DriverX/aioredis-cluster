@@ -2,10 +2,10 @@ import pytest
 
 from aioredis_cluster.command_info import (
     InvalidCommandError,
-    UnknownCommandError,
     default_registry,
     extract_keys,
 )
+from aioredis_cluster.util import ensure_str
 
 
 registry = default_registry
@@ -34,6 +34,45 @@ registry = default_registry
         ("EVAL", b"eval script 3 key1 key2 key3 val1".split(), [b"key1", b"key2", b"key3"]),
         ("EVALSHA", b"EVALSHA sha1 3 key1 key2 key3 val1".split(), [b"key1", b"key2", b"key3"]),
         ("PFMERGE", b"PFMERGE destkey sourcekey".split(), [b"destkey", b"sourcekey"]),
+        ("BLPOP", b"blpop blpop_key 10 0".split(), [b"blpop_key", b"10"]),
+        ("BRPOP", b"brpop key1 123".split(), [b"key1"]),
+        ("BRPOPLPUSH", b"BRPOPLPUSH src_key dst_key 123".split(), [b"src_key", b"dst_key"]),
+        ("BZPOPMIN", b"bzpopmin key1 key2 key3 1".split(), [b"key1", b"key2", b"key3"]),
+        (
+            "ZUNIONSTORE",
+            b"ZUNIONSTORE dest_key 3 key1 key2 key3 WEIGHTS 1 2 3".split(),
+            [b"dest_key", b"key1", b"key2", b"key3"],
+        ),
+        (
+            "ZUNION",
+            b"ZUNION 3 key1 key2 key3 AGGREGATE SUM WITHSCORES".split(),
+            [b"key1", b"key2", b"key3"],
+        ),
+        (
+            "ZUNIONSTORE",
+            b"ZUNIONSTORE dest_key 1 key1 key2 key3 WEIGHTS 1 2 3".split(),
+            [b"dest_key", b"key1"],
+        ),
+        (
+            "ZINTERSTORE",
+            b"ZINTERSTORE dest_key 3 key1 key2 key3".split(),
+            [b"dest_key", b"key1", b"key2", b"key3"],
+        ),
+        (
+            "ZINTER",
+            b"ZINTER 2 key1 key2 WITHSCORE".split(),
+            [b"key1", b"key2"],
+        ),
+        (
+            "ZDIFFSTORE",
+            b"ZDIFFSTORE dest_key 3 key1 key2 key3".split(),
+            [b"dest_key", b"key1", b"key2", b"key3"],
+        ),
+        (
+            "ZDIFF",
+            b"ZDIFF 3 key1 key2 key3".split(),
+            [b"key1", b"key2", b"key3"],
+        ),
     ],
 )
 def test_extract_keys__successful(cmd, exec_command, expect):
@@ -92,13 +131,14 @@ def test_registry_get_info__is_readonly(cmd_name, expect):
 
 
 @pytest.mark.parametrize(
-    "cmd_name, expect",
+    "cmd_name",
     [
-        ("GEET", UnknownCommandError),
-        ("", UnknownCommandError),
-        (b"LRANGE ", UnknownCommandError),
+        "GEET",
+        "",
+        b"LRANGE ",
     ],
 )
-def test_registry_get_info__error(cmd_name, expect):
-    with pytest.raises(expect):
-        registry.get_info(cmd_name)
+def test_registry_get_info__error(cmd_name):
+    cmd_info = registry.get_info(cmd_name)
+    assert cmd_info.name == ensure_str(cmd_name).upper()
+    assert cmd_info.is_unknown() is True

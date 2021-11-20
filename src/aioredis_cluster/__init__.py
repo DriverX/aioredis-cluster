@@ -1,5 +1,6 @@
 from ._version import __version__
 from .cluster import Cluster
+from .cluster_state import ClusterState
 from .commands import RedisCluster
 from .errors import (
     AskError,
@@ -14,6 +15,7 @@ from .errors import (
     UncoveredSlotError,
 )
 from .factory import create_cluster, create_redis_cluster, is_redis_cluster
+from .structs import Address, ClusterNode
 
 
 __all__ = [
@@ -37,4 +39,9 @@ __all__ = [
     "LoadingError",
     # helpers
     "is_redis_cluster",
+    # public structs
+    "Address",
+    "ClusterNode",
+    # cluster management
+    "ClusterState",
 ]

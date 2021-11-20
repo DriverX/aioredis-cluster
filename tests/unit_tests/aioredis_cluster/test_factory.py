@@ -1,7 +1,6 @@
 import warnings
-from unittest import mock
 
-import asynctest
+import mock
 import pytest
 
 from aioredis_cluster.factory import create_cluster, create_redis_cluster
@@ -12,8 +11,8 @@ from aioredis_cluster.structs import Address
 def cluster_fix():
     def factory():
         cluster = mock.NonCallableMock()
-        cluster._init = asynctest.CoroutineMock()
-        cluster.wait_closed = asynctest.CoroutineMock()
+        cluster._init = mock.AsyncMock()
+        cluster.wait_closed = mock.AsyncMock()
         return cluster
 
     return factory
