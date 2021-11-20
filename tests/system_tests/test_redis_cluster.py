@@ -129,7 +129,16 @@ async def test_eval(redis_cluster):
 async def test_blocking_commands(redis_cluster):
     cl = await redis_cluster()
 
-    bfut = asyncio.ensure_future(cl.blpop("blpop_key", timeout=10))
-    await cl.rpush("blpop_key", "passed")
-    blop_result = await bfut
-    assert blop_result == b"passed"
+    b1fut = asyncio.ensure_future(
+        cl.blpop("blpop_key1{slot}", "blpop_key2{slot}", timeout=10)
+    )
+    b2fut = asyncio.ensure_future(
+        cl.blpop("blpop_key2{slot}", "blpop_key1{slot}", timeout=10)
+    )
+    await cl.rpush("blpop_key2{slot}", "1")
+    await cl.lpush("blpop_key1{slot}", "2")
+    b1_result = await b1fut
+    b2_result = await b2fut
+
+    assert b1_result == [b"blpop_key2{slot}", b"1"]
+    assert b2_result == [b"blpop_key1{slot}", b"2"]
