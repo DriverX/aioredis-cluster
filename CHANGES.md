@@ -10,10 +10,14 @@ Changes
     * `get_master_node_by_keys(*keys)` - return master `ClusterNode` which contains keys `keys`
     * `create_pool_by_addr(addr, **kwargs)` - create connection pool by `addr` and return pool wrapped by `commands_factory` from `Cluster` constructor. By default is `aioredis_cluster.RedisCluster` instance.
     * `get_cluster_state()` - return `ClusterState` instance with recent known cluster state received from Redis cluster
+    * `extract_keys(command_sequence)` - returns keys of command sequence
 * drop `pytest-aiohttp` plugin for tests
 * add `pytest-asyncio` dependency for tests
 * switch `asynctest` -> `mock` library for aio tests
 * drop `attrs` dependency. For Python 3.6 you need install `dataclasses`
+* fix extract keys for `BLPOP`/`BRPOP` commands
+* add support keys extraction for `ZUNION`, `ZINTER`, `ZDIFF`, `ZUNIONSTORE`, `ZINTERSTORE`, `ZDIFFSTORE` commands
+* acquire dedicate connection from pool for potential blocking commands like `BLPOP`, `BRPOP`, `BRPOPLPUSH`, `BLMOVE`, `BLMPOP`, `BZPOPMIN`, `BZPOPMAX`, `XREAD`, `XREADGROUP`
 
 1.5.2 (2020-12-14)
 ------------------

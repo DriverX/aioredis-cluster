@@ -1,5 +1,6 @@
-import pytest
 import asyncio
+
+import pytest
 
 from aioredis_cluster import RedisClusterError
 from aioredis_cluster.commands.commands import _blocked_methods
@@ -128,7 +129,7 @@ async def test_eval(redis_cluster):
 async def test_blocking_commands(redis_cluster):
     cl = await redis_cluster()
 
-    bfut = asyncio.ensure_future(cl.blpop("blpop_key", 10))
+    bfut = asyncio.ensure_future(cl.blpop("blpop_key", timeout=10))
     await cl.rpush("blpop_key", "passed")
     blop_result = await bfut
     assert blop_result == b"passed"

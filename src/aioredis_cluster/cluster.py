@@ -38,6 +38,7 @@ from aioredis_cluster.pooler import Pooler
 from aioredis_cluster.structs import Address, ClusterNode
 from aioredis_cluster.typedef import (
     AioredisAddress,
+    BytesOrStr,
     CommandsFactory,
     PubsubResponse,
 )
@@ -474,6 +475,14 @@ class Cluster(AbcCluster):
 
     async def get_cluster_state(self) -> ClusterState:
         return await self._manager.get_state()
+
+    def extract_keys(self, command_seq: Sequence[BytesOrStr]) -> List[bytes]:
+        if len(command_seq) < 1:
+            raise ValueError("No command")
+        command_seq_bytes = tuple(iter_ensure_bytes(command_seq))
+        cmd_info = self._manager.commands.get_info(command_seq_bytes[0])
+        keys = extract_keys(cmd_info, command_seq_bytes)
+        return keys
 
     async def _init(self) -> None:
         await self._manager._init()

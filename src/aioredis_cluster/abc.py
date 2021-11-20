@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import AnyStr, List
+from typing import AnyStr, List, Sequence, Union
 
 from aioredis import Redis
 from aioredis.abc import AbcChannel, AbcConnection, AbcPool
@@ -14,6 +14,9 @@ __all__ = [
     "AbcChannel",
     "AbcCluster",
 ]
+
+
+BytesOrStr = Union[bytes, str]
 
 
 class AbcCluster(AbcConnection):
@@ -45,4 +48,8 @@ class AbcCluster(AbcConnection):
 
     @abstractmethod
     async def get_cluster_state(self) -> ClusterState:
+        pass
+
+    @abstractmethod
+    def extract_keys(self, command_seq: Sequence[BytesOrStr]) -> List[bytes]:
         pass

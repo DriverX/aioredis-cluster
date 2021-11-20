@@ -3,6 +3,9 @@
 __all__ = (
     "COMMANDS",
     "BLOCKING_COMMANDS",
+    "EVAL_COMMANDS",
+    "ZUNION_COMMANDS",
+    "ZUNIONSTORE_COMMANDS",
 )
 
 COMMANDS = [
@@ -220,5 +223,28 @@ BLOCKING_COMMANDS = frozenset(
         "BZPOPMAX",
         "XREAD",
         "XREADGROUP",
+    }
+)
+
+EVAL_COMMANDS = frozenset(
+    {
+        "EVAL",
+        "EVALSHA",
+    }
+)
+
+ZUNION_COMMANDS = frozenset(
+    {
+        "ZUNION",
+        "ZINTER",
+        "ZDIFF",
+    }
+)
+
+ZUNIONSTORE_COMMANDS = frozenset(
+    {
+        "ZUNIONSTORE",
+        "ZINTERSTORE",
+        "ZDIFFSTORE",
     }
 )

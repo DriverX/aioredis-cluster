@@ -3,12 +3,16 @@ from typing import AnyStr, FrozenSet, List, NoReturn, Sequence
 
 from aioredis_cluster.util import ensure_str
 
-from .commands import BLOCKING_COMMANDS, COMMANDS
+from .commands import (
+    BLOCKING_COMMANDS,
+    COMMANDS,
+    EVAL_COMMANDS,
+    ZUNION_COMMANDS,
+    ZUNIONSTORE_COMMANDS,
+)
 
 
 __all__ = [
-    "COMMANDS",
-    "BLOCKING_COMMANDS",
     "CommandsRegistry",
     "CommandInfo",
     "CommandInfoError",
@@ -27,7 +31,7 @@ class InvalidCommandError(CommandInfoError):
     pass
 
 
-def _raise_wrong_num_of_arguments(cmd) -> NoReturn:
+def _raise_wrong_num_of_arguments(cmd: "CommandInfo") -> NoReturn:
     raise InvalidCommandError(f"Wrong number of arguments for {cmd.name!r} command")
 
 
@@ -76,8 +80,8 @@ def _extract_keys_general(info: CommandInfo, exec_command: Sequence[bytes]) -> L
     if info.first_key_arg <= 0:
         return []
 
-    if info.last_key_arg == -1:
-        last_key_arg = len(exec_command) - 1
+    if info.last_key_arg < 0:
+        last_key_arg = len(exec_command) + info.last_key_arg
     else:
         last_key_arg = info.last_key_arg
 
@@ -100,6 +104,32 @@ def _extract_keys_eval(info: CommandInfo, exec_command: Sequence[bytes]) -> List
     return list(keys)
 
 
+def _extract_keys_zunion(
+    info: CommandInfo,
+    exec_command: Sequence[bytes],
+    store: bool,
+) -> List[bytes]:
+    keys: List[bytes] = []
+    if store:
+        keys.append(exec_command[1])
+        # dest key + numkeys arguments
+        num_of_keys = int(exec_command[2]) + 1
+        first_key_arg = 3
+        last_key_arg = first_key_arg + num_of_keys - 2
+    else:
+        num_of_keys = int(exec_command[1])
+        first_key_arg = 2
+        last_key_arg = first_key_arg + num_of_keys - 1
+
+    if num_of_keys == 0:
+        _raise_wrong_num_of_arguments(info)
+
+    keys.extend(exec_command[first_key_arg : last_key_arg + 1])
+    if len(keys) != num_of_keys:
+        _raise_wrong_num_of_arguments(info)
+    return keys
+
+
 def extract_keys(info: CommandInfo, exec_command: Sequence[bytes]) -> List[bytes]:
     if len(exec_command) < 1:
         raise ValueError("Execute command is empty")
@@ -112,8 +142,12 @@ def extract_keys(info: CommandInfo, exec_command: Sequence[bytes]) -> List[bytes
         _raise_wrong_num_of_arguments(info)
 
     # special parsing for command
-    if info.name in {"EVAL", "EVALSHA"}:
+    if info.name in EVAL_COMMANDS:
         keys = _extract_keys_eval(info, exec_command)
+    elif info.name in ZUNION_COMMANDS:
+        keys = _extract_keys_zunion(info, exec_command, False)
+    elif info.name in ZUNIONSTORE_COMMANDS:
+        keys = _extract_keys_zunion(info, exec_command, True)
     else:
         keys = _extract_keys_general(info, exec_command)
 
