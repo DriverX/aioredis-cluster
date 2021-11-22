@@ -6,7 +6,7 @@ Changes
 ------------------
 
 * make public `Address`, `ClusterNode` and `ClusterState` structs. Available by import `from aioredis_cluster import`
-* `Cluster` provides some new helpful methods^
+* `Cluster` provides some new helpful methods:
     * `get_master_node_by_keys(*keys)` - return master `ClusterNode` which contains keys `keys`
     * `create_pool_by_addr(addr, **kwargs)` - create connection pool by `addr` and return pool wrapped by `commands_factory` from `Cluster` constructor. By default is `aioredis_cluster.RedisCluster` instance.
     * `get_cluster_state()` - return `ClusterState` instance with recent known cluster state received from Redis cluster
