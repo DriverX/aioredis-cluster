@@ -7,6 +7,8 @@ from .commands import (
     BLOCKING_COMMANDS,
     COMMANDS,
     EVAL_COMMANDS,
+    XREAD_COMMAND,
+    XREADGROUP_COMMAND,
     ZUNION_COMMANDS,
     ZUNIONSTORE_COMMANDS,
 )
@@ -130,6 +132,37 @@ def _extract_keys_zunion(
     return keys
 
 
+_STREAMS_OPTION = frozenset((b"STREAMS", b"streams"))
+
+
+def _extract_keys_xread(
+    info: CommandInfo,
+    exec_command: Sequence[bytes],
+    read_group: bool,
+) -> List[bytes]:
+    exec_command_len = len(exec_command)
+    first_key_arg = 0
+
+    if read_group:
+        first_key_find_range = range(4, min(10, exec_command_len + 1))
+    else:
+        first_key_find_range = range(1, min(6, exec_command_len + 1))
+    for idx in first_key_find_range:
+        if exec_command[idx] in _STREAMS_OPTION:
+            first_key_arg = idx + 1
+            break
+
+    if first_key_arg == 0:
+        _raise_wrong_num_of_arguments(info)
+
+    num_of_stream_args = exec_command_len - first_key_arg
+    if num_of_stream_args % 2 == 1:
+        _raise_wrong_num_of_arguments(info)
+
+    nom_of_keys = num_of_stream_args // 2
+    return list(exec_command[first_key_arg : first_key_arg + nom_of_keys])
+
+
 def extract_keys(info: CommandInfo, exec_command: Sequence[bytes]) -> List[bytes]:
     if len(exec_command) < 1:
         raise ValueError("Execute command is empty")
@@ -148,6 +181,10 @@ def extract_keys(info: CommandInfo, exec_command: Sequence[bytes]) -> List[bytes
         keys = _extract_keys_zunion(info, exec_command, False)
     elif info.name in ZUNIONSTORE_COMMANDS:
         keys = _extract_keys_zunion(info, exec_command, True)
+    elif info.name == XREAD_COMMAND:
+        keys = _extract_keys_xread(info, exec_command, False)
+    elif info.name == XREADGROUP_COMMAND:
+        keys = _extract_keys_xread(info, exec_command, True)
     else:
         keys = _extract_keys_general(info, exec_command)
 

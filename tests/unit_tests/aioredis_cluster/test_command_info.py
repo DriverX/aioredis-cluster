@@ -73,6 +73,34 @@ registry = default_registry
             b"ZDIFF 3 key1 key2 key3".split(),
             [b"key1", b"key2", b"key3"],
         ),
+        (
+            "XREAD",
+            b"XREAD STREAMS stream1 >".split(),
+            [b"stream1"],
+        ),
+        (
+            "XREAD",
+            b"XREAD COUNT 1234 BLOCK 0 STREAMS stream1 stream2 > $".split(),
+            [b"stream1", b"stream2"],
+        ),
+        (
+            "XREADGROUP",
+            b"XREADGROUP GROUP group consumer STREAMS stream1 >".split(),
+            [b"stream1"],
+        ),
+        (
+            "XREADGROUP",
+            b"XREADGROUP GROUP group consumer STREAMS stream1 stream2 stream3 1 2 3".split(),
+            [b"stream1", b"stream2", b"stream3"],
+        ),
+        (
+            "XREADGROUP",
+            (
+                b"XREADGROUP GROUP group consumer COUNT 1 BLOCK 2500 NOACK "
+                b"STREAMS stream1 stream2 > $"
+            ).split(),
+            [b"stream1", b"stream2"],
+        ),
     ],
 )
 def test_extract_keys__successful(cmd, exec_command, expect):

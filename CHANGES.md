@@ -1,6 +1,10 @@
 Changes
 =======
 
+1.6.1 (2021-11-23)
+------------------
+
+* fix keys extraction for `XREAD` and `XREADGROUP` commands
 
 1.6.0 (2021-11-20)
 ------------------
