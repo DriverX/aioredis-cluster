@@ -4,6 +4,7 @@ from typing import AnyStr, Callable, List, Optional, Set, Type, TypeVar, cast
 
 from aioredis.abc import AbcConnection
 from aioredis.commands import Redis
+from aioredis.util import _NOTSET
 
 from aioredis_cluster.abc import AbcCluster
 
@@ -52,7 +53,7 @@ class RedisCluster(ClusterCommandsMixin, Redis):
         return await self.connection.keys_master(key, *keys)
 
     # special behavior for commands
-    async def randomkey(self) -> Optional[bytes]:
+    async def randomkey(self, *, encoding=_NOTSET) -> Optional[bytes]:
         if not conn_is_cluster(self.connection):
             return await super().randomkey()
 

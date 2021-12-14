@@ -1,3 +1,4 @@
+import datetime
 from functools import lru_cache
 
 import pytest
@@ -5,6 +6,7 @@ import pytest
 from aioredis_cluster.errors import ClusterStateError, UncoveredSlotError
 from aioredis_cluster.manager import (
     ClusterState,
+    NodeClusterState,
     _ClusterStateData,
     create_cluster_state,
 )
@@ -15,7 +17,14 @@ from ._cluster_slots import SLOTS
 
 @lru_cache(None)
 def get_state():
-    return create_cluster_state(SLOTS)
+    return create_cluster_state(
+        SLOTS,
+        {
+            "cluster_state": "ok",
+            "cluster_current_epoch": "1",
+        },
+        Address("172.17.0.1", 6379),
+    )
 
 
 def get_nodes_addr(nodes):
@@ -35,7 +44,14 @@ def get_slots_ranges(slots):
 
 
 def test_create_cluster_state():
-    state = create_cluster_state(SLOTS)
+    state = create_cluster_state(
+        SLOTS,
+        {
+            "cluster_state": "ok",
+            "cluster_current_epoch": "1",
+        },
+        Address("172.17.0.1", 6379),
+    )
 
     addrs = sorted([Address("172.17.0.2", port) for port in range(7000, 7005)])
     masters_addrs = sorted(
@@ -76,6 +92,11 @@ def test_create_cluster_state():
     assert get_nodes_addr(state_data.masters) == masters_addrs
     assert get_nodes_addr([r for rs in state_data.replicas.values() for r in rs]) == replicas_addrs
     assert get_slots_ranges(state_data.slots) == slot_ranges
+    assert state.state is NodeClusterState.OK
+    assert state.state_from == Address("172.17.0.1", 6379)
+    assert isinstance(state._data.created_at, datetime.datetime)
+    assert state._data.created_at_local > 0
+    assert state.current_epoch == 1
 
     state.repr_stats()
     str(state)
@@ -174,3 +195,28 @@ def test_random_node(mocker):
     result = state.random_node()
 
     assert result is state._data.nodes[state._data.addrs[1]]
+
+
+def test_state__with_fail_state():
+    state = create_cluster_state(
+        SLOTS,
+        {
+            "cluster_state": "fail",
+            "cluster_current_epoch": "1",
+        },
+        Address("172.17.0.1", 6379),
+    )
+
+    assert state.state is NodeClusterState.FAIL
+
+    state = create_cluster_state(
+        SLOTS,
+        {
+            "cluster_state": "foobar",
+            "cluster_current_epoch": "1",
+        },
+        Address("172.17.0.1", 6379),
+    )
+
+    assert state.state is NodeClusterState.UNKNOWN
+    assert state.current_epoch == 1

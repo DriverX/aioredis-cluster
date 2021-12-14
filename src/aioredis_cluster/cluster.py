@@ -3,7 +3,17 @@ import logging
 from collections import ChainMap
 from time import monotonic
 from types import MappingProxyType
-from typing import Any, AnyStr, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import (
+    Any,
+    AnyStr,
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+)
 
 from aioredis import Redis, create_pool
 from aioredis.errors import ProtocolError, ReplyError
@@ -89,7 +99,7 @@ class Cluster(AbcCluster):
         pool_maxsize: int = None,
         commands_factory: CommandsFactory = None,
         connect_timeout: float = None,
-        pool_cls: AbcPool = None,
+        pool_cls: Type[AbcPool] = None,
     ) -> None:
         if len(startup_nodes) < 1:
             raise ValueError("startup_nodes must be one at least")
@@ -166,6 +176,7 @@ class Cluster(AbcCluster):
             self._pooler,
             state_reload_interval=state_reload_interval,
             follow_cluster=follow_cluster,
+            execute_timeout=self._attempt_timeout,
         )
 
         self._loop = asyncio.get_event_loop()
