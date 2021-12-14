@@ -1,9 +1,9 @@
 from unittest import mock
 
 import pytest
-from aioredis.commands import ContextRedis
 
 from aioredis_cluster.commands.commands import RedisCluster
+from aioredis_cluster.vendor.aioredis.commands import ContextRedis
 
 
 async def test_await_commands(mocker):

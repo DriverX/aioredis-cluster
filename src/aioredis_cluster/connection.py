@@ -1,9 +1,8 @@
 import asyncio
 
-import aioredis
-
 from aioredis_cluster.abc import AbcPool
 from aioredis_cluster.errors import ConnectTimeoutError
+from aioredis_cluster.vendor import aioredis
 
 
 __all__ = [

@@ -1,12 +1,11 @@
 from abc import abstractmethod
 from typing import AnyStr, AsyncContextManager, List, Sequence, Union
 
-from aioredis import Redis
-from aioredis.abc import AbcChannel, AbcConnection
-from aioredis.abc import AbcPool as _AbcPool
-
 from aioredis_cluster.cluster_state import ClusterState
 from aioredis_cluster.structs import Address, ClusterNode
+from aioredis_cluster.vendor.aioredis import Redis
+from aioredis_cluster.vendor.aioredis.abc import AbcChannel, AbcConnection
+from aioredis_cluster.vendor.aioredis.abc import AbcPool as _AbcPool
 
 
 __all__ = [

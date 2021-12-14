@@ -2,14 +2,13 @@ import random
 import warnings
 from typing import Any, List, Sequence
 
-import aioredis
-from aioredis.util import parse_url
-
 from aioredis_cluster.abc import AbcCluster
 from aioredis_cluster.cluster import Cluster
 from aioredis_cluster.commands import RedisCluster, conn_is_cluster
 from aioredis_cluster.structs import Address
 from aioredis_cluster.typedef import AioredisAddress, CommandsFactory
+from aioredis_cluster.vendor import aioredis
+from aioredis_cluster.vendor.aioredis.util import parse_url
 
 
 __all__ = [
