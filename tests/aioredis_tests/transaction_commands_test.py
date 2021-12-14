@@ -1,7 +1,8 @@
 import asyncio
 
 import pytest
-from aioredis import (
+
+from aioredis_cluster.aioredis import (
     ConnectionClosedError,
     MultiExecError,
     ReplyError,

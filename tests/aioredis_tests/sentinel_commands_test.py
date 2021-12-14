@@ -4,10 +4,11 @@ import sys
 
 import pytest
 from _testutils import redis_version
-from aioredis import PoolClosedError, RedisError, ReplyError
-from aioredis.abc import AbcPool
-from aioredis.errors import MasterReplyError
-from aioredis.sentinel.commands import RedisSentinel
+
+from aioredis_cluster.aioredis import PoolClosedError, RedisError, ReplyError
+from aioredis_cluster.aioredis.abc import AbcPool
+from aioredis_cluster.aioredis.errors import MasterReplyError
+from aioredis_cluster.aioredis.sentinel.commands import RedisSentinel
 
 
 pytestmark = redis_version(2, 8, 12, reason="Sentinel v2 required")
@@ -270,12 +271,12 @@ async def test_sentinel_master_pool_size(sentinel, create_sentinel, caplog):
     assert master.connection.size == 0
 
     caplog.clear()
-    with caplog.at_level("DEBUG", "aioredis.sentinel"):
+    with caplog.at_level("DEBUG", "aioredis_cluster.aioredis.sentinel"):
         assert await master.ping()
     assert len(caplog.record_tuples) == 1
     assert caplog.record_tuples == [
         (
-            "aioredis.sentinel",
+            "aioredis_cluster.aioredis.sentinel",
             logging.DEBUG,
             "Discoverred new address {} for master-no-fail".format(master.address),
         ),

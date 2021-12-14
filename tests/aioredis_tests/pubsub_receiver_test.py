@@ -5,9 +5,10 @@ import sys
 from unittest import mock
 
 import pytest
-from aioredis import ChannelClosedError
-from aioredis.abc import AbcChannel
-from aioredis.pubsub import Receiver, _Sender
+
+from aioredis_cluster.aioredis import ChannelClosedError
+from aioredis_cluster.aioredis.abc import AbcChannel
+from aioredis_cluster.aioredis.pubsub import Receiver, _Sender
 
 
 def test_listener_channel():
@@ -168,7 +169,7 @@ async def test_stopped(create_connection, server, caplog):
     mpsc.stop()
 
     caplog.clear()
-    with caplog.at_level("DEBUG", "aioredis"):
+    with caplog.at_level("DEBUG", "aioredis_cluster.aioredis"):
         await pub.execute("publish", "channel:1", b"Hello")
         await asyncio.sleep(0)
 
@@ -180,7 +181,7 @@ async def test_stopped(create_connection, server, caplog):
         "<Receiver is_active:False, senders:1, qsize:0>>, data: b'Hello'"
     )
     assert caplog.record_tuples == [
-        ("aioredis", logging.WARNING, message),
+        ("aioredis_cluster.aioredis", logging.WARNING, message),
     ]
 
     # assert (await mpsc.get()) is None

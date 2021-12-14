@@ -1,4 +1,4 @@
-from aioredis.errors import MaxClientsError, ReplyError
+from aioredis_cluster.aioredis.errors import MaxClientsError, ReplyError
 
 
 def test_return_default_class():

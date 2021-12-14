@@ -15,9 +15,9 @@ async def _reader(channel, output, waiter, conn):
         await output.put(msg)
 
 
-async def test_publish(create_connection, redis, server, loop):
+async def test_publish(create_connection, redis, server, event_loop):
     out = asyncio.Queue()
-    fut = loop.create_future()
+    fut = event_loop.create_future()
     conn = await create_connection(server.tcp_address)
     sub = asyncio.ensure_future(_reader("chan:1", out, fut, conn))
 

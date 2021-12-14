@@ -1,6 +1,7 @@
 import pytest
 from _testutils import redis_version
-from aioredis import GeoMember, GeoPoint
+
+from aioredis_cluster.aioredis import GeoMember, GeoPoint
 
 
 @redis_version(3, 2, 0, reason="GEOADD is available since redis >= 3.2.0")

@@ -28,24 +28,24 @@ SentinelServer = namedtuple("SentinelServer", "name tcp_address unixsocket versi
 # Public fixtures
 
 
-@pytest.yield_fixture
-def loop():
-    """Creates new event loop."""
-    loop = asyncio.new_event_loop()
-    if sys.version_info < (3, 8):
-        asyncio.set_event_loop(loop)
+# @pytest.yield_fixture
+# def loop():
+#     """Creates new event loop."""
+#     loop = asyncio.new_event_loop()
+#     if sys.version_info < (3, 8):
+#         asyncio.set_event_loop(loop)
 
-    try:
-        yield loop
-    finally:
-        if hasattr(loop, "is_closed"):
-            closed = loop.is_closed()
-        else:
-            closed = loop._closed  # XXX
-        if not closed:
-            loop.call_soon(loop.stop)
-            loop.run_forever()
-            loop.close()
+#     try:
+#         yield loop
+#     finally:
+#         if hasattr(loop, "is_closed"):
+#             closed = loop.is_closed()
+#         else:
+#             closed = loop._closed  # XXX
+#         if not closed:
+#             loop.call_soon(loop.stop)
+#             loop.run_forever()
+#             loop.close()
 
 
 @pytest.fixture(scope="session")
@@ -112,37 +112,39 @@ def create_sentinel(_closable):
 
 
 @pytest.fixture
-def pool(create_pool, server, loop):
+def pool(create_pool, server, event_loop):
     """Returns RedisPool instance."""
-    return loop.run_until_complete(create_pool(server.tcp_address))
+    return event_loop.run_until_complete(create_pool(server.tcp_address))
 
 
 @pytest.fixture
-def redis(create_redis, server, loop):
+def redis(create_redis, server, event_loop):
     """Returns Redis client instance."""
-    redis = loop.run_until_complete(create_redis(server.tcp_address))
+    redis = event_loop.run_until_complete(create_redis(server.tcp_address))
 
     async def clear():
         await redis.flushall()
 
-    loop.run_until_complete(clear())
+    event_loop.run_until_complete(clear())
     return redis
 
 
 @pytest.fixture
-def redis_sentinel(create_sentinel, sentinel, loop):
+def redis_sentinel(create_sentinel, sentinel, event_loop):
     """Returns Redis Sentinel client instance."""
-    redis_sentinel = loop.run_until_complete(create_sentinel([sentinel.tcp_address], timeout=2))
+    redis_sentinel = event_loop.run_until_complete(
+        create_sentinel([sentinel.tcp_address], timeout=2)
+    )
 
     async def ping():
         return await redis_sentinel.ping()
 
-    assert loop.run_until_complete(ping()) == b"PONG"
+    assert event_loop.run_until_complete(ping()) == b"PONG"
     return redis_sentinel
 
 
 @pytest.yield_fixture
-def _closable(loop):
+def _closable(event_loop):
     conns = []
 
     async def close():
@@ -157,7 +159,7 @@ def _closable(loop):
     try:
         yield conns.append
     finally:
-        loop.run_until_complete(close())
+        event_loop.run_until_complete(close())
 
 
 @pytest.fixture(scope="session")
@@ -544,7 +546,7 @@ def pytest_pyfunc_call(pyfuncitem):
             timeout = 15
 
         funcargs = pyfuncitem.funcargs
-        loop = funcargs["loop"]
+        loop = funcargs["event_loop"]
         testargs = {arg: funcargs[arg] for arg in pyfuncitem._fixtureinfo.argnames}
 
         loop.run_until_complete(_wait_coro(pyfuncitem.obj, testargs, timeout=timeout))
@@ -552,15 +554,15 @@ def pytest_pyfunc_call(pyfuncitem):
 
 
 async def _wait_coro(corofunc, kwargs, timeout):
-    with async_timeout(timeout):
+    async with async_timeout(timeout):
         return await corofunc(**kwargs)
 
 
-def pytest_runtest_setup(item):
-    is_coro = inspect.iscoroutinefunction(item.obj)
-    if is_coro and "loop" not in item.fixturenames:
-        # inject an event loop fixture for all async tests
-        item.fixturenames.append("loop")
+# def pytest_runtest_setup(item):
+#     is_coro = inspect.iscoroutinefunction(item.obj)
+#     if is_coro and "loop" not in item.fixturenames:
+#         # inject an event loop fixture for all async tests
+#         item.fixturenames.append("loop")
 
 
 def pytest_collection_modifyitems(session, config, items):

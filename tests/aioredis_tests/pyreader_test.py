@@ -1,11 +1,12 @@
 import pytest
-from aioredis.errors import (
+
+from aioredis_cluster.aioredis.errors import (
     AuthError,
     MaxClientsError,
     ProtocolError,
     ReplyError,
 )
-from aioredis.parser import PyReader
+from aioredis_cluster.aioredis.parser import PyReader
 
 
 @pytest.fixture

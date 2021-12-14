@@ -2,7 +2,8 @@ import asyncio
 
 import pytest
 from _testutils import redis_version
-from aioredis import ReplyError
+
+from aioredis_cluster.aioredis import ReplyError
 
 
 async def add(redis, key, value):

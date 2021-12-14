@@ -4,8 +4,9 @@ from unittest import mock
 
 import pytest
 from _testutils import redis_version
-from aioredis.commands.streams import parse_messages
-from aioredis.errors import BusyGroupError
+
+from aioredis_cluster.aioredis.commands.streams import parse_messages
+from aioredis_cluster.aioredis.errors import BusyGroupError
 
 
 pytestmark = redis_version(5, 0, 0, reason="Streams only available since Redis 5.0.0")

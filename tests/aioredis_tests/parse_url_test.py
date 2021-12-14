@@ -1,5 +1,6 @@
 import pytest
-from aioredis.util import parse_url
+
+from aioredis_cluster.aioredis.util import parse_url
 
 
 @pytest.mark.parametrize(

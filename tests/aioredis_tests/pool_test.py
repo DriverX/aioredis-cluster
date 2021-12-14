@@ -6,7 +6,8 @@ from unittest.mock import patch
 import async_timeout
 import pytest
 from _testutils import redis_version
-from aioredis import (
+
+from aioredis_cluster.aioredis import (
     ConnectionClosedError,
     ConnectionsPool,
     MaxClientsError,
@@ -154,7 +155,7 @@ async def test_release_pending(create_pool, server, caplog):
     assert pool.freesize == 1
 
     caplog.clear()
-    with caplog.at_level("WARNING", "aioredis"):
+    with caplog.at_level("WARNING", "aioredis_cluster.aioredis"):
         with (await pool) as conn:
             try:
                 await asyncio.wait_for(
@@ -167,7 +168,7 @@ async def test_release_pending(create_pool, server, caplog):
     assert pool.freesize == 0
     assert caplog.record_tuples == [
         (
-            "aioredis",
+            "aioredis_cluster.aioredis",
             logging.WARNING,
             "Connection <RedisConnection [db:0]>" " has pending commands, closing it.",
         ),
@@ -380,17 +381,21 @@ async def test_pool_check_closed_when_exception(create_pool, create_redis, start
 
     errors = (MaxClientsError, ConnectionClosedError, ConnectionError)
     caplog.clear()
-    with caplog.at_level("DEBUG", "aioredis"):
+    with caplog.at_level("DEBUG", "aioredis_cluster.aioredis"):
         with pytest.raises(errors):
             await create_pool(address=tuple(server.tcp_address), minsize=3)
 
     assert len(caplog.record_tuples) >= 3
     connect_msg = "Creating tcp connection to ('localhost', {})".format(server.tcp_address.port)
     assert caplog.record_tuples[:2] == [
-        ("aioredis", logging.DEBUG, connect_msg),
-        ("aioredis", logging.DEBUG, connect_msg),
+        ("aioredis_cluster.aioredis", logging.DEBUG, connect_msg),
+        ("aioredis_cluster.aioredis", logging.DEBUG, connect_msg),
     ]
-    assert caplog.record_tuples[-1] == ("aioredis", logging.DEBUG, "Closed 1 connection(s)")
+    assert caplog.record_tuples[-1] == (
+        "aioredis_cluster.aioredis",
+        logging.DEBUG,
+        "Closed 1 connection(s)",
+    )
 
 
 async def test_pool_get_connection(create_pool, server):
@@ -438,24 +443,32 @@ async def test_pool_idle_close(create_pool, start_server, caplog):
     assert ok == b"OK"
 
     caplog.clear()
-    with caplog.at_level("DEBUG", "aioredis"):
+    with caplog.at_level("DEBUG", "aioredis_cluster.aioredis"):
         # wait for either disconnection logged or test timeout reached.
         while len(caplog.record_tuples) < 2:
             await asyncio.sleep(0.5)
     expected = [
-        ("aioredis", logging.DEBUG, "Connection has been closed by server, response: None"),
-        ("aioredis", logging.DEBUG, "Connection has been closed by server, response: None"),
+        (
+            "aioredis_cluster.aioredis",
+            logging.DEBUG,
+            "Connection has been closed by server, response: None",
+        ),
+        (
+            "aioredis_cluster.aioredis",
+            logging.DEBUG,
+            "Connection has been closed by server, response: None",
+        ),
     ]
     if BPO_34638:
         expected += [
             (
-                "asyncio",
+                "aioredis_cluster.asyncio",
                 logging.ERROR,
                 "An open stream object is being garbage collected; "
                 'call "stream.close()" explicitly.',
             ),
             (
-                "asyncio",
+                "aioredis_cluster.asyncio",
                 logging.ERROR,
                 "An open stream object is being garbage collected; "
                 'call "stream.close()" explicitly.',

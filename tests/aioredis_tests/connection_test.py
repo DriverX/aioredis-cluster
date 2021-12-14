@@ -5,7 +5,8 @@ from unittest.mock import patch
 
 import pytest
 from _testutils import redis_version
-from aioredis import (
+
+from aioredis_cluster.aioredis import (
     Channel,
     ConnectionClosedError,
     MaxClientsError,

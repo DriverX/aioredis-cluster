@@ -2,8 +2,9 @@ import asyncio
 
 import pytest
 from _testutils import redis_version
-from aioredis import ConnectionClosedError, Redis, ReplyError
-from aioredis.pool import ConnectionsPool
+
+from aioredis_cluster.aioredis import ConnectionClosedError, Redis, ReplyError
+from aioredis_cluster.aioredis.pool import ConnectionsPool
 
 
 async def test_repr(create_redis, server):
