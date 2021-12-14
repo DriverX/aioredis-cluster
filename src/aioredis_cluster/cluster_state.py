@@ -1,12 +1,28 @@
+import datetime
+import enum
 import random
 import time
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from aioredis_cluster.errors import ClusterStateError, UncoveredSlotError
 from aioredis_cluster.structs import Address, ClusterNode, ClusterSlot
 
 
-__all__ = ("ClusterState",)
+__all__ = (
+    "NodeClusterState",
+    "ClusterState",
+)
+
+
+@enum.unique
+class NodeClusterState(enum.Enum):
+    UNKNOWN = "unknown"
+    OK = "ok"
+    FAIL = "fail"
+
+    @classmethod
+    def _missing_(cls, value: Any) -> "NodeClusterState":
+        return cls.UNKNOWN
 
 
 class _ClusterStateData:
@@ -15,13 +31,16 @@ class _ClusterStateData:
     """
 
     def __init__(self) -> None:
+        self.state: NodeClusterState
+        self.state_from: Address
         self.nodes: Dict[Address, ClusterNode] = {}
         self.addrs: List[Address] = []
         self.masters: List[ClusterNode] = []
         # master address -> list of replicas
         self.replicas: Dict[Address, List[ClusterNode]] = {}
         self.slots: List[ClusterSlot] = []
-        self.created_at = time.time()
+        self.created_at = datetime.datetime.now()
+        self.created_at_local = time.monotonic()
 
 
 class ClusterState:
@@ -32,14 +51,25 @@ class ClusterState:
         return f"<{type(self).__name__} {self.repr_stats()}>"
 
     def repr_stats(self) -> str:
-        num_of_replicas = sum(len(rs) for rs in self._data.replicas.values())
+        data = self._data
+        num_of_replicas = sum(len(rs) for rs in data.replicas.values())
         repr_parts = [
-            f"created:{self._data.created_at}",
-            f"masters:{len(self._data.masters)}",
+            f"state:{data.state.value}",
+            f"state_from:{data.state_from}",
+            f"created:{data.created_at.isoformat()}",
+            f"masters:{len(data.masters)}",
             f"replicas:{num_of_replicas}",
-            f"slot ranges:{len(self._data.slots)}",
+            f"slot_ranges:{len(data.slots)}",
         ]
         return ", ".join(repr_parts)
+
+    @property
+    def state(self) -> NodeClusterState:
+        return self._data.state
+
+    @property
+    def state_from(self) -> Address:
+        return self._data.state_from
 
     def find_slot(self, slot: int) -> ClusterSlot:
         slots = self._data.slots

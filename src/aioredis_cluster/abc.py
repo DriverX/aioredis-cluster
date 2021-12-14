@@ -1,8 +1,9 @@
 from abc import abstractmethod
-from typing import AnyStr, List, Sequence, Union
+from typing import AnyStr, AsyncContextManager, List, Sequence, Union
 
 from aioredis import Redis
-from aioredis.abc import AbcChannel, AbcConnection, AbcPool
+from aioredis.abc import AbcChannel, AbcConnection
+from aioredis.abc import AbcPool as _AbcPool
 
 from aioredis_cluster.cluster_state import ClusterState
 from aioredis_cluster.structs import Address, ClusterNode
@@ -52,4 +53,30 @@ class AbcCluster(AbcConnection):
 
     @abstractmethod
     def extract_keys(self, command_seq: Sequence[BytesOrStr]) -> List[bytes]:
+        pass
+
+
+class AbcPool(_AbcPool):
+    @abstractmethod
+    def get(self) -> AsyncContextManager[Redis]:
+        pass
+
+    @property
+    @abstractmethod
+    def size(self) -> int:
+        pass
+
+    @property
+    @abstractmethod
+    def minsize(self) -> int:
+        pass
+
+    @property
+    @abstractmethod
+    def maxsize(self) -> int:
+        pass
+
+    @property
+    @abstractmethod
+    def freesize(self) -> int:
         pass
