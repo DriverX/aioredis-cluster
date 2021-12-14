@@ -13,7 +13,7 @@ from typing import (
     Union,
 )
 
-from aioredis_cluster.vendor.aioredis.util import _converters, decode
+from aioredis_cluster.aioredis.util import _converters, decode
 
 
 __all__ = (

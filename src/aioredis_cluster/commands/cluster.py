@@ -5,7 +5,7 @@ from aioredis_cluster.util import (
     parse_cluster_slaves,
     parse_info,
 )
-from aioredis_cluster.vendor.aioredis.util import (
+from aioredis_cluster.aioredis.util import (
     _NOTSET,
     wait_convert,
     wait_ok,

@@ -3,9 +3,9 @@ from functools import wraps
 from typing import AnyStr, Callable, List, Optional, Set, Type, TypeVar, cast
 
 from aioredis_cluster.abc import AbcCluster
-from aioredis_cluster.vendor.aioredis.abc import AbcConnection
-from aioredis_cluster.vendor.aioredis.commands import Redis
-from aioredis_cluster.vendor.aioredis.util import _NOTSET
+from aioredis_cluster.aioredis.abc import AbcConnection
+from aioredis_cluster.aioredis.commands import Redis
+from aioredis_cluster.aioredis.util import _NOTSET
 
 from .cluster import ClusterCommandsMixin
 from .custom import StreamCustomCommandsMixin

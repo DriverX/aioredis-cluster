@@ -1,5 +1,5 @@
 from aioredis_cluster.util import parse_moved_response_error
-from aioredis_cluster.vendor.aioredis.errors import (
+from aioredis_cluster.aioredis.errors import (
     ConnectionClosedError,
     PoolClosedError,
     RedisError,

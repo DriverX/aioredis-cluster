@@ -55,8 +55,8 @@ from aioredis_cluster.util import (
     iter_ensure_bytes,
     retry_backoff,
 )
-from aioredis_cluster.vendor.aioredis import Redis, create_pool
-from aioredis_cluster.vendor.aioredis.errors import ProtocolError, ReplyError
+from aioredis_cluster.aioredis import Redis, create_pool
+from aioredis_cluster.aioredis.errors import ProtocolError, ReplyError
 
 
 __all__ = (
