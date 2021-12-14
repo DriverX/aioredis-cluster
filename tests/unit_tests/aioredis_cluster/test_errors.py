@@ -1,5 +1,6 @@
 import pytest
 
+from aioredis_cluster.aioredis import ReplyError
 from aioredis_cluster.errors import (
     AskError,
     ClusterDownError,
@@ -7,7 +8,6 @@ from aioredis_cluster.errors import (
     MovedError,
     TryAgainError,
 )
-from aioredis_cluster.vendor.aioredis import ReplyError
 
 
 @pytest.mark.parametrize(

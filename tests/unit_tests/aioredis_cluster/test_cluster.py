@@ -3,6 +3,12 @@ import asyncio
 import mock
 import pytest
 
+from aioredis_cluster.aioredis import (
+    ConnectionClosedError,
+    ConnectionForcedCloseError,
+    PoolClosedError,
+    ProtocolError,
+)
 from aioredis_cluster.cluster import Cluster
 from aioredis_cluster.command_info import default_registry
 from aioredis_cluster.commands import RedisCluster
@@ -17,12 +23,6 @@ from aioredis_cluster.errors import (
     UncoveredSlotError,
 )
 from aioredis_cluster.structs import Address
-from aioredis_cluster.vendor.aioredis import (
-    ConnectionClosedError,
-    ConnectionForcedCloseError,
-    PoolClosedError,
-    ProtocolError,
-)
 
 
 def create_async_mock(**kwargs):

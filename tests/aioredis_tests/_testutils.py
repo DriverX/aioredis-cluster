@@ -1,7 +1,8 @@
 import pytest
 
+
 __all__ = [
-    'redis_version',
+    "redis_version",
 ]
 
 

@@ -18,6 +18,8 @@ from typing import (
 from async_timeout import timeout as atimeout
 
 from aioredis_cluster.abc import AbcChannel, AbcCluster, AbcPool
+from aioredis_cluster.aioredis import Redis, create_pool
+from aioredis_cluster.aioredis.errors import ProtocolError, ReplyError
 from aioredis_cluster.command_exec import (
     ExecuteContext,
     ExecuteFailProps,
@@ -55,8 +57,6 @@ from aioredis_cluster.util import (
     iter_ensure_bytes,
     retry_backoff,
 )
-from aioredis_cluster.aioredis import Redis, create_pool
-from aioredis_cluster.aioredis.errors import ProtocolError, ReplyError
 
 
 __all__ = (
