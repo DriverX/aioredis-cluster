@@ -3,6 +3,7 @@
 These are intended to be used for implementing custom connection managers.
 """
 import abc
+from typing import AsyncContextManager
 
 
 __all__ = [
@@ -102,6 +103,30 @@ class AbcPool(AbcConnection):
     @abc.abstractmethod
     def address(self):
         """Connection address or None."""
+
+    @abc.abstractmethod
+    def get(self) -> AsyncContextManager[AbcConnection]:
+        pass
+
+    @property
+    @abc.abstractmethod
+    def size(self) -> int:
+        pass
+
+    @property
+    @abc.abstractmethod
+    def minsize(self) -> int:
+        pass
+
+    @property
+    @abc.abstractmethod
+    def maxsize(self) -> int:
+        pass
+
+    @property
+    @abc.abstractmethod
+    def freesize(self) -> int:
+        pass
 
 
 class AbcChannel(abc.ABC):
