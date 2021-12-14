@@ -12,10 +12,11 @@ import time
 from collections import namedtuple
 from urllib.parse import urlencode, urlunparse
 
-import aioredis
-import aioredis.sentinel
 import pytest
 from async_timeout import timeout as async_timeout
+
+from aioredis_cluster import aioredis
+from aioredis_cluster.aioredis import sentinel as aioredis_sentinel
 
 
 TCPAddress = namedtuple("TCPAddress", "host port")
@@ -103,7 +104,7 @@ def create_sentinel(_closable):
     async def f(*args, **kw):
         # make it fail fast on slow CIs (if timeout argument is ommitted)
         kw.setdefault("timeout", 0.001)
-        client = await aioredis.sentinel.create_sentinel(*args, **kw)
+        client = await aioredis_sentinel.create_sentinel(*args, **kw)
         _closable(client)
         return client
 
@@ -564,7 +565,7 @@ def pytest_runtest_setup(item):
 
 def pytest_collection_modifyitems(session, config, items):
     skip_by_version = []
-    for item in items[:]:
+    for item in items:
         marker = item.get_closest_marker("redis_version")
         if marker is not None:
             try:
@@ -582,9 +583,14 @@ def pytest_collection_modifyitems(session, config, items):
                     reason="socat package required (apt-get install socat)",
                 )
             )
+
     if len(items) != len(skip_by_version):
         for i in skip_by_version:
             items.remove(i)
+
+    for item in items:
+        if not item.get_closest_marker("asyncio") and asyncio.iscoroutinefunction(item.function):
+            item.add_marker(pytest.mark.asyncio)
 
 
 def pytest_configure(config):

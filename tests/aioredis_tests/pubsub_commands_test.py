@@ -1,8 +1,9 @@
 import asyncio
 
-import aioredis
 import pytest
 from _testutils import redis_version
+
+from aioredis_cluster import aioredis
 
 
 async def _reader(channel, output, waiter, conn):

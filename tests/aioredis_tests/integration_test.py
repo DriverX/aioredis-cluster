@@ -1,7 +1,8 @@
 import asyncio
 
-import aioredis
 import pytest
+
+from aioredis_cluster import aioredis
 
 
 @pytest.fixture

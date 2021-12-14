@@ -86,6 +86,8 @@ setup(
             # "pytest-aiohttp",
             "pytest-mock",
             "pytest-asyncio",
+            "pytest-cov",
+            "pytest-xdist",
             "types-dataclasses; python_version < '3.7'",
         ],
     },
