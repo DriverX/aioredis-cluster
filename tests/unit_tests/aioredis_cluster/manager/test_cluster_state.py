@@ -184,3 +184,21 @@ def test_random_node(mocker):
     result = state.random_node()
 
     assert result is state._data.nodes[state._data.addrs[1]]
+
+
+def test_state__with_fail_state():
+    state = create_cluster_state(
+        SLOTS,
+        {"cluster_state": "fail"},
+        Address("172.17.0.1", 6379),
+    )
+
+    assert state.state is NodeClusterState.FAIL
+
+    state = create_cluster_state(
+        SLOTS,
+        {"cluster_state": "foobar"},
+        Address("172.17.0.1", 6379),
+    )
+
+    assert state.state is NodeClusterState.UNKNOWN
