@@ -32,3 +32,17 @@ SLOTS = [
     [10923, 12181, ["172.17.0.2", 7002, "c80666a77621a0061a3af77a1fda46c94c2abcb9"]],
     [12183, 16383, ["172.17.0.2", 7002, "c80666a77621a0061a3af77a1fda46c94c2abcb9"]],
 ]
+
+
+INFO = {
+    "cluster_state": "ok",
+    "cluster_current_epoch": "1",
+    "cluster_slots_assigned": "16384",
+    "cluster_slots_ok": "16384",
+    "cluster_slots_pfail": "0",
+    "cluster_slots_fail": "0",
+    "cluster_known_nodes": "6",
+    "cluster_size": "3",
+    "cluster_current_epoch": "1",
+    "cluster_my_epoch": "1",
+}

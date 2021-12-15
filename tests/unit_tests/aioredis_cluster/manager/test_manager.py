@@ -188,7 +188,7 @@ async def test_fetch_state__first_response(pooler_mock, mocker):
     conn = pooler._conn
     cluster_slots_resp = object()
     conn.execute.side_effect = [
-        "cluster_state:ok\ncluster_current_epoch:1",
+        "cluster_state:ok\ncluster_current_epoch:1\ncluster_slots_assigned:16384",
         cluster_slots_resp,
     ]
     manager = ClusterManager(["addr1"], pooler)
@@ -209,7 +209,7 @@ async def test_fetch_state__with_fail_state(pooler_mock, mocker):
     pooler = pooler_mock()
     conn = pooler._conn
     conn.execute.side_effect = [
-        "cluster_state:fail\ncluster_current_epoch:1",
+        "cluster_state:fail\ncluster_current_epoch:1\ncluster_slots_assigned:16384",
         SLOTS,
     ]
     manager = ClusterManager(["addr1"], pooler)
@@ -232,13 +232,13 @@ async def test_fetch_state__with_error_but_success(pooler_mock):
 
     conn.execute.side_effect = [
         # first try
-        "cluster_state:fail\ncluster_current_epoch:1",
+        "cluster_state:fail\ncluster_current_epoch:1\ncluster_slots_assigned:16384",
         object(),
         # second try
-        "cluster_state:ok\ncluster_current_epoch:1",
+        "cluster_state:ok\ncluster_current_epoch:1\ncluster_slots_assigned:16384",
         RuntimeError("execute fail"),
         # success third try
-        "cluster_state:ok\ncluster_current_epoch:1",
+        "cluster_state:ok\ncluster_current_epoch:1\ncluster_slots_assigned:16384",
         SLOTS,
     ]
 

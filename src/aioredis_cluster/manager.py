@@ -50,6 +50,7 @@ def create_cluster_state(
     state_data.state = NodeClusterState(cluster_info[CLUSTER_INFO_STATE_KEY])
     state_data.state_from = state_from
     state_data.current_epoch = int(cluster_info[CLUSTER_INFO_CURRENT_EPOCH_KEY])
+    state_data.slots_assigned = int(cluster_info[CLUSTER_INFO_SLOTS_ASSIGNED])
 
     nodes: Dict[Address, ClusterNode] = {}
     master_replicas: Dict[Address, List[ClusterNode]] = {}
