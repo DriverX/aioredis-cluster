@@ -152,20 +152,25 @@ class Pooler:
         self._reap_calls += 1
 
         collected = []
-        for addr, h in tuple(self._nodes.items()):
-            if h.generation < current_gen:
-                h.pool.close()
+        try:
+            for addr, h in tuple(self._nodes.items()):
+                if h.generation < current_gen:
+                    h.pool.close()
 
-                # cleanup collections
-                self._erase_addr(addr)
+                    # cleanup collections
+                    self._erase_addr(addr)
 
-                collected.append(h.pool)
+                    collected.append(h.pool)
+        except Exception as e:
+            logger.error("Unexpected error while collect outdate pools: %r", e)
 
         if collected:
             for pool in collected:
                 try:
                     await pool.wait_closed()
-                except Exception as e:
+                except (asyncio.CancelledError, SystemExit, KeyboardInterrupt):
+                    raise
+                except BaseException as e:
                     logger.error("Unexpected error while pool closing: %r", e)
 
             logger.info("%d idle connections pools reaped", len(collected))
