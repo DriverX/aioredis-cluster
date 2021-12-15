@@ -34,6 +34,7 @@ class _ClusterStateData:
         self.state: NodeClusterState
         self.state_from: Address
         self.current_epoch: int
+        self.slots_assigned: int
         self.nodes: Dict[Address, ClusterNode] = {}
         self.addrs: List[Address] = []
         self.masters: List[ClusterNode] = []
@@ -47,24 +48,28 @@ class _ClusterStateData:
 class ClusterState:
     def __init__(self, data: _ClusterStateData):
         self._data = data
+        self._cached_repr: Optional[str] = None
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__} {self.repr_stats()}>"
 
     def repr_stats(self) -> str:
-        data = self._data
-        num_of_replicas = sum(len(rs) for rs in data.replicas.values())
-        repr_parts = [
-            f"state:{data.state.value}",
-            f"state_from:{data.state_from}",
-            f"created:{data.created_at.isoformat()}",
-            f"nodes:{len(data.nodes)}",
-            f"masters:{len(data.masters)}",
-            f"replicas:{num_of_replicas}",
-            f"slot_ranges:{len(data.slots)}",
-            f"current_epoch:{data.current_epoch}",
-        ]
-        return ", ".join(repr_parts)
+        if self._cached_repr is None:
+            data = self._data
+            num_of_replicas = sum(len(rs) for rs in data.replicas.values())
+            repr_parts = [
+                f"state:{data.state.value}",
+                f"state_from:{data.state_from}",
+                f"created:{data.created_at.isoformat()}",
+                f"nodes:{len(data.nodes)}",
+                f"masters:{len(data.masters)}",
+                f"replicas:{num_of_replicas}",
+                f"slots_assigned:{data.slots_assigned}",
+                f"slot_ranges:{len(data.slots)}",
+                f"current_epoch:{data.current_epoch}",
+            ]
+            self._cached_repr = ", ".join(repr_parts)
+        return self._cached_repr
 
     @property
     def state(self) -> NodeClusterState:
@@ -77,6 +82,10 @@ class ClusterState:
     @property
     def current_epoch(self) -> int:
         return self._data.current_epoch
+
+    @property
+    def slots_assigned(self) -> int:
+        return self._data.slots_assigned
 
     def find_slot(self, slot: int) -> ClusterSlot:
         slots = self._data.slots

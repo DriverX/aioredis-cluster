@@ -12,17 +12,14 @@ from aioredis_cluster.manager import (
 )
 from aioredis_cluster.structs import Address
 
-from ._cluster_slots import SLOTS
+from ._cluster_slots import INFO, SLOTS
 
 
 @lru_cache(None)
 def get_state():
     return create_cluster_state(
         SLOTS,
-        {
-            "cluster_state": "ok",
-            "cluster_current_epoch": "1",
-        },
+        INFO,
         Address("172.17.0.1", 6379),
     )
 
@@ -46,10 +43,7 @@ def get_slots_ranges(slots):
 def test_create_cluster_state():
     state = create_cluster_state(
         SLOTS,
-        {
-            "cluster_state": "ok",
-            "cluster_current_epoch": "1",
-        },
+        INFO,
         Address("172.17.0.1", 6379),
     )
 
@@ -203,6 +197,7 @@ def test_state__with_fail_state():
         {
             "cluster_state": "fail",
             "cluster_current_epoch": "1",
+            "cluster_slots_assigned": "16384",
         },
         Address("172.17.0.1", 6379),
     )
@@ -214,6 +209,7 @@ def test_state__with_fail_state():
         {
             "cluster_state": "foobar",
             "cluster_current_epoch": "1",
+            "cluster_slots_assigned": "16384",
         },
         Address("172.17.0.1", 6379),
     )

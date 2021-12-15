@@ -34,6 +34,7 @@ __all__ = (
 SlotsResponse = List[List]
 CLUSTER_INFO_STATE_KEY = "cluster_state"
 CLUSTER_INFO_CURRENT_EPOCH_KEY = "cluster_current_epoch"
+CLUSTER_INFO_SLOTS_ASSIGNED = "cluster_slots_assigned"
 
 
 def slots_ranges(slots: Sequence[ClusterSlot]) -> List[Tuple[int, int]]:
@@ -49,6 +50,7 @@ def create_cluster_state(
     state_data.state = NodeClusterState(cluster_info[CLUSTER_INFO_STATE_KEY])
     state_data.state_from = state_from
     state_data.current_epoch = int(cluster_info[CLUSTER_INFO_CURRENT_EPOCH_KEY])
+    state_data.slots_assigned = int(cluster_info[CLUSTER_INFO_SLOTS_ASSIGNED])
 
     nodes: Dict[Address, ClusterNode] = {}
     master_replicas: Dict[Address, List[ClusterNode]] = {}
@@ -210,7 +212,12 @@ class ClusterManager:
                 )
                 continue
 
-            logger.debug("Cluster state successful loaded from %s: %r", addr, slots_resp)
+            logger.debug(
+                "Cluster state successful loaded from %s: info:%r slots:%r",
+                addr,
+                cluster_info,
+                slots_resp,
+            )
 
             break
         else:
