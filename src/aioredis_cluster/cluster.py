@@ -272,7 +272,7 @@ class Cluster(AbcCluster):
                 try:
                     node_addr = state.random_slot_node(ctx.slot).addr
                 except UncoveredSlotError:
-                    logger.warning("No node found for slot %d", ctx.slot)
+                    logger.warning("No any node found by slot %d", ctx.slot)
                     node_addr = state.random_node().addr
 
             try:
@@ -435,7 +435,12 @@ class Cluster(AbcCluster):
             ctx.attempt += 1
 
             state = await self._manager.get_state()
-            node = state.slot_master(slot)
+            try:
+                node = state.slot_master(slot)
+            except UncoveredSlotError:
+                logger.warning("No master node found by slot %d", slot)
+                self._manager.require_reload_state()
+                raise
 
             exec_fail_props = None
             try:
@@ -460,7 +465,13 @@ class Cluster(AbcCluster):
     async def get_master_node_by_keys(self, key: AnyStr, *keys: AnyStr) -> ClusterNode:
         slot = self.determine_slot(ensure_bytes(key), *iter_ensure_bytes(keys))
         state = await self._manager.get_state()
-        node = state.slot_master(slot)
+        try:
+            node = state.slot_master(slot)
+        except UncoveredSlotError:
+            logger.warning("No master node found by slot %d", slot)
+            self._manager.require_reload_state()
+            raise
+
         return node
 
     async def create_pool_by_addr(
@@ -579,7 +590,7 @@ class Cluster(AbcCluster):
                 try:
                     node = state.slot_master(ctx.slot)
                 except UncoveredSlotError:
-                    logger.warning("No node found for slot %d", ctx.slot)
+                    logger.warning("No node found by slot %d", ctx.slot)
 
                     # probably cluster is corrupted and
                     # we need try to recover cluster state
