@@ -200,7 +200,7 @@ class ClusterManager:
                 logger.warning("Unable to get cluster state from %s: %r", addr, e)
                 continue
 
-            if cluster_info[CLUSTER_INFO_STATE_KEY] != "ok":
+            if cluster_info[CLUSTER_INFO_STATE_KEY] != NodeClusterState.OK.value:
                 logger.warning(
                     'Node %s was return not "ok" cluster state "%s". Try next node',
                     addr,
