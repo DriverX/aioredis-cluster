@@ -1,6 +1,12 @@
 Changes
 =======
 
+1.7.1 (2021-12-15)
+------------------
+
+* add `ClusterState.slots_assigned`
+* require reload cluster state for some cases with `UncoveredSlotError`
+
 1.7.0 (2021-12-15)
 ------------------
 
