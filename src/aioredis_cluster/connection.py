@@ -2,6 +2,7 @@ import asyncio
 
 import aioredis
 
+from aioredis_cluster.abc import AbcPool
 from aioredis_cluster.errors import ConnectTimeoutError
 
 
@@ -10,7 +11,7 @@ __all__ = [
 ]
 
 
-class ConnectionsPool(aioredis.ConnectionsPool):
+class ConnectionsPool(aioredis.ConnectionsPool, AbcPool):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 

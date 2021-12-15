@@ -98,6 +98,7 @@ async def test_init__defaults(mocker):
         cl._pooler,
         state_reload_interval=None,
         follow_cluster=None,
+        execute_timeout=5.0,
     )
 
 
@@ -145,6 +146,7 @@ async def test_init__customized(mocker):
         cl._pooler,
         state_reload_interval=kwargs["state_reload_interval"],
         follow_cluster=kwargs["follow_cluster"],
+        execute_timeout=kwargs["attempt_timeout"],
     )
 
 

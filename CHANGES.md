@@ -1,6 +1,15 @@
 Changes
 =======
 
+1.7.0 (2021-12-15)
+------------------
+
+* add `execute_timeout` for `Manager`
+* improve cluster state reload logging
+* reduce number of addresses to fetch cluster state
+* acquire dedicate connection from pool to fetch cluster state
+* extend ClusterState by new attributes: `state`, `state_from`, `current_epoch`
+
 1.6.1 (2021-11-23)
 ------------------
 
