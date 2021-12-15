@@ -205,6 +205,19 @@ async def test_fetch_state__first_response(pooler_mock, mocker):
     assert execute_calls[1] == mock.call(b"CLUSTER", b"SLOTS", encoding="utf-8")
 
 
+async def test_fetch_state__with_fail_state(pooler_mock, mocker):
+    pooler = pooler_mock()
+    conn = pooler._conn
+    conn.execute.side_effect = [
+        "cluster_state:fail",
+        SLOTS,
+    ]
+    manager = ClusterManager(["addr1"], pooler)
+    result = await manager._fetch_state(["addr2"])
+
+    assert result.state is NodeClusterState.FAIL
+
+
 async def test_fetch_state__with_error_but_success(pooler_mock):
     pooler = pooler_mock()
     conn = pooler._conn
