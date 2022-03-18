@@ -3,6 +3,7 @@ import warnings
 from typing import Any, Dict, List, Optional, Sequence
 
 import aioredis
+from aioredis.abc import AbcPool
 from aioredis.util import parse_url
 
 from aioredis_cluster.abc import AbcCluster
