@@ -191,7 +191,7 @@ async def test_create_pool_by_addr(mocker):
         pool_maxsize=15,
         connect_timeout=1.2,
         pool_cls=pool_cls,
-        pool_opts=None,
+        pool_opts={"ssl": True},
     )
     mocked_manager = mocker.patch.object(cl, "_manager", new=get_manager_mock())
     state = mocked_manager.get_state.return_value
@@ -202,7 +202,7 @@ async def test_create_pool_by_addr(mocker):
     ]
 
     addr = Address("addr2", 8002)
-    redis = await cl.create_pool_by_addr(addr, maxsize=42)
+    redis = await cl.create_pool_by_addr(addr, maxsize=42, pool_opts={"ssl": True})
 
     assert redis.connection is mocked_create_pool.return_value
     mocked_create_pool.assert_called_once_with(
@@ -213,6 +213,7 @@ async def test_create_pool_by_addr(mocker):
         minsize=5,
         maxsize=42,
         create_connection_timeout=1.2,
+        ssl=True,
     )
 
 

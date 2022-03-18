@@ -79,7 +79,7 @@ async def test_create_cluster__parametrized(mocker, cluster_fix):
         pool_minsize=1,
         pool_maxsize=5,
         connect_timeout=3.5,
-        pool_opts=None,
+        pool_opts={"ssl": True},
     )
 
     assert result is cluster
@@ -100,7 +100,7 @@ async def test_create_cluster__parametrized(mocker, cluster_fix):
         pool_minsize=1,
         pool_maxsize=5,
         connect_timeout=3.5,
-        pool_opts=None
+        pool_opts={"ssl": True}
     )
 
 

@@ -496,12 +496,15 @@ class Cluster(AbcCluster):
         *,
         minsize: int = None,
         maxsize: int = None,
+        pool_opts: Dict[str, Any] = None,
     ) -> Redis:
         state = await self._manager.get_state()
         if state.has_addr(addr) is False:
             raise ValueError(f"Unknown node address {addr}")
 
-        opts: Dict[str, Any] = {}
+        if pool_opts is None:
+            pool_opts = {}
+        opts: Dict[str, Any] = pool_opts
         if minsize is not None:
             opts["minsize"] = minsize
         if maxsize is not None:
