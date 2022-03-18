@@ -16,6 +16,7 @@ from typing import (
 )
 
 from aioredis import Redis, create_pool
+from aioredis.abc import AbcPool
 from aioredis.errors import ProtocolError, ReplyError
 from async_timeout import timeout as atimeout
 
@@ -63,6 +64,19 @@ __all__ = (
     "AbcCluster",
     "Cluster",
 )
+
+
+
+class PoolFactory:
+    def __init__(self, default_pool_opts: Optional[Dict[str, Any]] = None):
+        if default_pool_opts is None:
+            default_pool_opts = {}
+        self._default_pool_opts: Dict[str, Any] = default_pool_opts
+
+    async def create_pool(self, addr: AioredisAddress, opts: Dict[str, Any] = None, *args, **kwargs) -> AbcPool:
+        pool = await create_pool(addr, **{**self._default_pool_opts, **kwargs})
+
+        return pool
 
 
 class Cluster(AbcCluster):

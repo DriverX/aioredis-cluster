@@ -191,6 +191,7 @@ async def test_create_pool_by_addr(mocker):
         pool_maxsize=15,
         connect_timeout=1.2,
         pool_cls=pool_cls,
+        pool_opts=None,
     )
     mocked_manager = mocker.patch.object(cl, "_manager", new=get_manager_mock())
     state = mocked_manager.get_state.return_value
