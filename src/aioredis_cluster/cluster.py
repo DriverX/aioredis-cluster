@@ -16,7 +16,7 @@ from typing import (
 )
 
 from aioredis import Redis, create_pool
-from aioredis.abc import AbcPool
+
 from aioredis.errors import ProtocolError, ReplyError
 from async_timeout import timeout as atimeout
 
