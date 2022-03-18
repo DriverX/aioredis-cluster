@@ -1,6 +1,6 @@
 import random
 import warnings
-from typing import Any, List, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 import aioredis
 from aioredis.util import parse_url
@@ -38,6 +38,7 @@ async def create_cluster(
     pool_minsize: int = None,
     pool_maxsize: int = None,
     connect_timeout: float = None,
+    pool_opts: Optional[Dict[str, Any]] = None
 ) -> AbcCluster:
     corrected_nodes: List[Address] = []
     for mixed_addr in startup_nodes:
@@ -58,7 +59,6 @@ async def create_cluster(
             "`state_reload_frequency` is deprecated and is no affect anything",
             DeprecationWarning,
         )
-
     cluster = Cluster(
         corrected_nodes,
         retry_min_delay=retry_min_delay,
@@ -73,6 +73,7 @@ async def create_cluster(
         pool_maxsize=pool_maxsize,
         connect_timeout=connect_timeout,
         attempt_timeout=attempt_timeout,
+        pool_opts=pool_opts,
     )
     try:
         await cluster._init()
@@ -104,6 +105,7 @@ async def create_redis_cluster(
     pool_minsize: int = None,
     pool_maxsize: int = None,
     connect_timeout: float = None,
+    pool_opts: Optional[Dict[str, Any]] = None
 ) -> RedisCluster:
     if cluster_commands_factory is None:
         cluster_commands_factory = RedisCluster
@@ -121,6 +123,7 @@ async def create_redis_cluster(
         pool_maxsize=pool_maxsize,
         connect_timeout=connect_timeout,
         attempt_timeout=attempt_timeout,
+        pool_opts=pool_opts,
     )
     return cluster_commands_factory(cluster)
 

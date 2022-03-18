@@ -100,6 +100,7 @@ class Cluster(AbcCluster):
         commands_factory: CommandsFactory = None,
         connect_timeout: float = None,
         pool_cls: Type[AbcPool] = None,
+        pool_opts: Optional[Dict[str, Any]] = None
     ) -> None:
         if len(startup_nodes) < 1:
             raise ValueError("startup_nodes must be one at least")
@@ -169,6 +170,7 @@ class Cluster(AbcCluster):
             pool_cls = ConnectionsPool
         self._pool_cls = pool_cls
 
+        self._pool_factory = PoolFactory(pool_opts)
         self._pooler = Pooler(self._create_default_pool, reap_frequency=idle_connection_timeout)
 
         self._manager = ClusterManager(
@@ -742,7 +744,7 @@ class Cluster(AbcCluster):
             create_connection_timeout=self._connect_timeout,
         )
 
-        pool = await create_pool(addr, **{**default_opts, **opts})
+        pool = await self._pool_factory.create_pool(addr, **{**default_opts, **opts})
 
         return pool
 
