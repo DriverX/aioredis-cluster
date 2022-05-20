@@ -1,6 +1,12 @@
 Changes
 =======
 
+
+1.8.0 (2022-05-20)
+------------------
+
+* Add `xadd_620` commands method for support `XADD` options for Redis 6.2+
+
 1.7.1 (2021-12-15)
 ------------------
 
