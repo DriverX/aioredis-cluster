@@ -9,6 +9,7 @@ from aioredis.util import _NOTSET
 from aioredis_cluster.abc import AbcCluster
 
 from .cluster import ClusterCommandsMixin
+from .custom import StreamCustomCommandsMixin
 
 
 __all__ = (
@@ -35,7 +36,7 @@ def blocked_for_cluster(method: Callable[..., _T]) -> Callable[..., _T]:
     return wrapper
 
 
-class RedisCluster(ClusterCommandsMixin, Redis):
+class RedisCluster(ClusterCommandsMixin, StreamCustomCommandsMixin, Redis):
     # proxy methods to connection (cluster instance)
     async def all_masters(self) -> List[Redis]:
         self._only_for_cluster()
