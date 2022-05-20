@@ -80,7 +80,7 @@ setup(
             "mypy",
             "isort>=5.0.0, <6.0.0",
             "mock>=4.0.0",
-            "black==21.10b0",
+            "black==22.3.0",
             "coverage",
             "pytest",
             "pytest-cov",
