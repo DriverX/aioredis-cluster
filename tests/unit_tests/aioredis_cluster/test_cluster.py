@@ -9,10 +9,10 @@ from aioredis_cluster.aioredis import (
     PoolClosedError,
     ProtocolError,
 )
+from aioredis_cluster.aioredis.pool import ConnectionsPool
 from aioredis_cluster.cluster import Cluster
 from aioredis_cluster.command_info import default_registry
 from aioredis_cluster.commands import RedisCluster
-from aioredis_cluster.connection import ConnectionsPool
 from aioredis_cluster.errors import (
     AskError,
     ClusterDownError,

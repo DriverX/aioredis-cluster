@@ -5,8 +5,8 @@ import types
 import warnings
 
 from .abc import AbcPool
-from .connection import _PUBSUB_COMMANDS, create_connection
-from .errors import PoolClosedError
+from .connection import _PUBSUB_COMMANDS, RedisConnection, create_connection
+from .errors import ConnectTimeoutError, PoolClosedError
 from .log import logger
 from .util import CloseEvent, parse_url
 
@@ -447,17 +447,20 @@ class ConnectionsPool(AbcPool):
                     # connection may be closed at yield point
                     self._drop_closed()
 
-    def _create_new_connection(self, address):
-        return create_connection(
-            address,
-            db=self._db,
-            password=self._password,
-            ssl=self._ssl,
-            encoding=self._encoding,
-            parser=self._parser_class,
-            timeout=self._create_connection_timeout,
-            connection_cls=self._connection_cls,
-        )
+    async def _create_new_connection(self, address) -> RedisConnection:
+        try:
+            return await create_connection(
+                address,
+                db=self._db,
+                password=self._password,
+                ssl=self._ssl,
+                encoding=self._encoding,
+                parser=self._parser_class,
+                timeout=self._create_connection_timeout,
+                connection_cls=self._connection_cls,
+            )
+        except asyncio.TimeoutError:
+            raise ConnectTimeoutError(address)
 
     async def _wakeup(self, closing_conn=None):
         async with self._cond:
