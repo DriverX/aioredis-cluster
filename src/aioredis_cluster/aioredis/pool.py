@@ -122,6 +122,7 @@ class ConnectionsPool(AbcPool):
         self._minsize = minsize
         self._create_connection_timeout = create_connection_timeout
         self._pool = collections.deque(maxlen=maxsize)
+        self._released = collections.deque(maxlen=maxsize)
         self._used = set()
         self._acquiring = 0
         self._cond = asyncio.Condition(lock=asyncio.Lock())
@@ -130,8 +131,13 @@ class ConnectionsPool(AbcPool):
         self._connection_cls = connection_cls
 
     def __repr__(self):
-        return "<{} [db:{}, size:[{}:{}], free:{}]>".format(
-            self.__class__.__name__, self.db, self.minsize, self.maxsize, self.freesize
+        return "<{} [db:{}, size:[{}:{}:{}], free:{}]>".format(
+            self.__class__.__name__,
+            self.db,
+            self.minsize,
+            self.maxsize,
+            self.size,
+            self.freesize,
         )
 
     @property
@@ -350,11 +356,21 @@ class ConnectionsPool(AbcPool):
         """
         if self.closed:
             raise PoolClosedError("Pool is closed")
+
         async with self._cond:
             if self.closed:
                 raise PoolClosedError("Pool is closed")
+
+            acquire_after_wait = False
             while True:
-                await self._fill_free(override_min=True)
+                try:
+                    await self._fill_free(override_min=True)
+                except (asyncio.CancelledError, Exception):
+                    if acquire_after_wait:
+                        acquire_after_wait = False
+                        self._cond.notify()
+                    raise
+
                 if self.freesize:
                     conn = self._pool.popleft()
                     assert not conn.closed, conn
@@ -363,6 +379,7 @@ class ConnectionsPool(AbcPool):
                     return conn
                 else:
                     await self._cond.wait()
+                    acquire_after_wait = True
 
     def release(self, conn):
         """Returns used connection back into pool.
@@ -372,7 +389,7 @@ class ConnectionsPool(AbcPool):
         When queue of free connections is full the connection will be dropped.
         """
         assert conn in self._used, ("Invalid connection, maybe from other pool", conn)
-        self._used.remove(conn)
+        self._released.append(conn)
         if not conn.closed:
             if conn.in_transaction:
                 logger.warning("Connection %r is in transaction, closing it.", conn)
@@ -384,9 +401,7 @@ class ConnectionsPool(AbcPool):
                 logger.warning("Connection %r has pending commands, closing it.", conn)
                 conn.close()
             elif conn.db == self.db:
-                if self.maxsize and self.freesize < self.maxsize:
-                    self._pool.append(conn)
-                else:
+                if not (self.maxsize and self.freesize < self.maxsize):
                     # consider this connection as old and close it.
                     conn.close()
             else:
@@ -445,6 +460,10 @@ class ConnectionsPool(AbcPool):
 
     async def _wakeup(self, closing_conn=None):
         async with self._cond:
+            if self._released:
+                self._pool.extend(self._released)
+                self._used.difference_update(self._released)
+                self._released.clear()
             self._cond.notify()
         if closing_conn is not None:
             await closing_conn.wait_closed()
