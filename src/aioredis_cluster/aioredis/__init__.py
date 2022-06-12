@@ -11,6 +11,7 @@ from .errors import (
     ChannelClosedError,
     ConnectionClosedError,
     ConnectionForcedCloseError,
+    ConnectTimeoutError,
     MasterNotFoundError,
     MasterReplyError,
     MaxClientsError,
@@ -32,7 +33,7 @@ from .sentinel import RedisSentinel, create_sentinel
 
 __version__ = "1.3.1"
 
-__all__ = [
+__all__ = (
     # Factories
     "create_connection",
     "create_pool",
@@ -58,6 +59,7 @@ __all__ = [
     "WatchVariableError",
     "ConnectionClosedError",
     "ConnectionForcedCloseError",
+    "ConnectTimeoutError",
     "PoolClosedError",
     "ChannelClosedError",
     "MasterNotFoundError",
@@ -65,4 +67,4 @@ __all__ = [
     "ReadOnlyError",
     "MasterReplyError",
     "SlaveReplyError",
-]
+)
