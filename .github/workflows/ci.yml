@@ -44,7 +44,7 @@ jobs:
           make mypy
       - name: Test with pytest
         run: |
-          make test
+          make tests
 
   system_tests:
     runs-on: ubuntu-latest
