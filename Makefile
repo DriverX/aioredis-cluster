@@ -3,7 +3,7 @@ EGG_INFO = src/aioredis_cluster.egg-info
 LINT_FORMAT_PATHS = tests src
 
 .PHONY: all
-all: black isort flake mypy test
+all: black isort flake mypy tests
 
 .PHONY: clean
 clean:
@@ -28,9 +28,13 @@ flake:
 mypy:
 	mypy src
 
-.PHONY: test
-test:
+.PHONY: tests
+tests:
 	pytest tests/unit_tests
+
+.PHONY: aioredis_tests
+aioredis_tests:
+	pytest tests/aioredis_tests
 
 .PHONY: isort
 isort:
@@ -44,8 +48,8 @@ black:
 black-check:
 	black --check --diff --color ${LINT_FORMAT_PATHS}
 
-.PHONY: system_test
-system_test:
+.PHONY: system_tests
+system_tests:
 	REDIS_CLUSTER_STARTUP_NODES=${REDIS_CLUSTER_STARTUP_NODES} pytest tests/system_tests
 
 .PHONY: ci-test-static
