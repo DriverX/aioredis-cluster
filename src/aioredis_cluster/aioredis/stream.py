@@ -44,6 +44,9 @@ class StreamReader(asyncio.StreamReader):
     to the Redis parser directly.
     """
 
+    _buffer: bytearray
+    _eof: bool
+
     _parser = None
 
     def set_parser(self, parser):
@@ -62,7 +65,7 @@ class StreamReader(asyncio.StreamReader):
             self._buffer.extend(data)
             return
         self._parser.feed(data)
-        self._wakeup_waiter()
+        self._wakeup_waiter()  # type: ignore
 
         # TODO: implement pause the read. Its needed
         #       expose the len of the buffer from hiredis
@@ -85,13 +88,13 @@ class StreamReader(asyncio.StreamReader):
                 # to be parsed and we have to wait for more data.
                 return obj
 
-            if self._exception:
-                raise self._exception
+            if self._exception:  # type: ignore
+                raise self._exception  # type: ignore
 
             if self._eof:
                 break
 
-            await self._wait_for_data("readobj")
+            await self._wait_for_data("readobj")  # type: ignore
         # NOTE: after break we return None which must be handled as b''
 
     async def _read_not_allowed(self, *args, **kwargs):

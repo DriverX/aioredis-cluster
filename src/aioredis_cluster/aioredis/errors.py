@@ -37,7 +37,7 @@ class ReplyError(RedisError):
         for klass in cls.__subclasses__():
             if msg and klass.MATCH_REPLY and msg.startswith(klass.MATCH_REPLY):
                 return klass(msg, *args)
-        return super().__new__(cls, msg, *args)
+        return super().__new__(cls, msg, *args)  # type: ignore
 
 
 class MaxClientsError(ReplyError):

@@ -1,4 +1,4 @@
-from typing import Callable, Generator, Iterator, Optional  # noqa
+from typing import Callable, Generator, Iterator, Optional, Type, cast
 
 from .errors import ProtocolError, ReplyError
 
@@ -170,6 +170,6 @@ class Parser:
 try:
     import hiredis
 
-    Reader = hiredis.Reader
+    Reader = cast(Type[PyReader], hiredis.Reader)
 except ImportError:
     Reader = PyReader
