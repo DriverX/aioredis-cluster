@@ -130,7 +130,7 @@ def test_errors_in_nested_multi_bulk(reader):
 
 
 def test_integer(reader):
-    value = 2 ** 63 - 1  # Largest 64-bit signed integer
+    value = 2**63 - 1  # Largest 64-bit signed integer
     reader.feed((":%d\r\n" % value).encode("ascii"))
     assert reader.gets() == value
 

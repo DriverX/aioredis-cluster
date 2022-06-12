@@ -1,24 +1,11 @@
-.PHONY: \
-	all \
-	clean \
-	black \
-	black-check \
-	flake \
-	mypy \
-	test \
-	system_test \
-	devel \
-	isort \
-	mypy \
-	ci-test-static \
-	ci-test \
-	ci-redis-test \
-
 PYTHON ?= python3
 EGG_INFO = src/aioredis_cluster.egg-info
+LINT_FORMAT_PATHS = tests src
 
+.PHONY: all
 all: black isort flake mypy test
 
+.PHONY: clean
 clean:
 	@rm -rf build dist
 	@rm -rf `find . -name __pycache__`
@@ -26,51 +13,62 @@ clean:
 	@rm -rf `find . -type d -name .mypy_cache`
 	@rm -rf `find . -type d -name .pytest_cache`
 	@rm -rf `find . -type d -name '*.egg-info'`
-	@python setup.py clean
 	@rm -f .make-*
 	@rm -rf `find . -type f -name 'Pipfile*'`
 
+.PHONY: devel
 devel:
 	pip install -Ue '.[devel]'
 
+.PHONY: flake
 flake:
-	flake8 setup.py src/aioredis_cluster tests
+	flake8 src tests
 
+.PHONY: mypy
 mypy:
-	mypy setup.py src/aioredis_cluster
+	mypy src
 
+.PHONY: test
 test:
 	pytest tests/unit_tests
 
+.PHONY: isort
 isort:
-	@isort setup.py src/aioredis_cluster tests
+	isort ${LINT_FORMAT_PATHS}
 
+.PHONY: black
 black:
-	black setup.py tests src
+	black ${LINT_FORMAT_PATHS}
 
+.PHONY: black-check
 black-check:
-	black --check --diff --color setup.py tests src
+	black --check --diff --color ${LINT_FORMAT_PATHS}
 
+.PHONY: system_test
 system_test:
 	REDIS_CLUSTER_STARTUP_NODES=${REDIS_CLUSTER_STARTUP_NODES} pytest tests/system_tests
 
+.PHONY: ci-test-static
 ci-test-static:
 	pip install -Ur tests/requirements.txt
 	pip install -e .
-	black --check --diff --color setup.py tests src
-	flake8 setup.py src/aioredis_cluster tests
-	mypy setup.py src/aioredis_cluster
+	black --check --diff --color ${LINT_FORMAT_PATHS}
+	flake8 src/aioredis_cluster tests
+	mypy src/aioredis_cluster
 
+.PHONY: ci-test
 ci-test:
 	pip install -Ur tests/requirements.txt
 	pip install -e .
 	pytest tests/unit_tests
 
+.PHONY: ci-redis-test
 ci-redis-test:
 	pip install -Ur tests/requirements.txt
 	pip install -e .
 	REDIS_CLUSTER_STARTUP_NODES=${REDIS_CLUSTER_STARTUP_NODES} pytest tests/system_tests
 
+.PHONY: dist
 dist: clean
 ifeq ($(VERSION),)
 	@echo "No package version found" >&2
@@ -79,5 +77,10 @@ else
 	@echo "Make version file with ${VERSION}"; \
 	echo "__version__ = '$(VERSION)'" > src/aioredis_cluster/_version.py
 endif
-	pip install -U wheel
-	$(PYTHON) setup.py sdist bdist_wheel
+	pip install -U \
+		twine \
+		wheel \
+		build \
+		setuptools
+	$(PYTHON) -m build -swn .
+	ls -l dist/
