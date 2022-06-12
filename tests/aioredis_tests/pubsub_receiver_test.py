@@ -267,7 +267,7 @@ async def test_decode_message_for_pattern():
     assert res[1] == (b"channel", {"hello": "world"})
 
 
-async def test_pubsub_receiver_iter(create_redis, server, loop):
+async def test_pubsub_receiver_iter(create_redis, server, event_loop):
     sub = await create_redis(server.tcp_address)
     pub = await create_redis(server.tcp_address)
 
@@ -288,7 +288,7 @@ async def test_pubsub_receiver_iter(create_redis, server, loop):
     assert subscribers > 1
     subscribers = await pub.publish_json("chan:2", ["message"])
     assert subscribers > 1
-    loop.call_later(0, mpsc.stop)
+    event_loop.call_later(0, mpsc.stop)
     await asyncio.sleep(0.01)
     assert await tsk == [
         (snd1, b'{"Hello": "World"}'),
@@ -300,7 +300,7 @@ async def test_pubsub_receiver_iter(create_redis, server, loop):
 
 
 @pytest.mark.timeout(5)
-async def test_pubsub_receiver_call_stop_with_empty_queue(create_redis, server, loop):
+async def test_pubsub_receiver_call_stop_with_empty_queue(create_redis, server, event_loop):
     sub = await create_redis(server.tcp_address)
 
     mpsc = Receiver()
@@ -308,11 +308,11 @@ async def test_pubsub_receiver_call_stop_with_empty_queue(create_redis, server, 
     # FIXME: currently at least one subscriber is needed
     (snd1,) = await sub.subscribe(mpsc.channel("chan:1"))
 
-    now = loop.time()
-    loop.call_later(0.5, mpsc.stop)
+    now = event_loop.time()
+    event_loop.call_later(0.5, mpsc.stop)
     async for i in mpsc.iter():  # noqa (flake8 bug with async for)
         assert False, "StopAsyncIteration not raised"
-    dt = loop.time() - now
+    dt = event_loop.time() - now
     assert dt <= 1.5
     assert not mpsc.is_active
 

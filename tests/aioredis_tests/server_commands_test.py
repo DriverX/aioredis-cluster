@@ -13,7 +13,7 @@ async def test_client_list(redis, server, request):
     assert await redis.client_setname(name)
     res = await redis.client_list()
     assert isinstance(res, list)
-    res = [dict(i._asdict()) for i in res]
+    info = [dict(i._asdict()) for i in res]
     expected = {
         "addr": mock.ANY,
         "fd": mock.ANY,
@@ -37,7 +37,23 @@ async def test_client_list(redis, server, request):
         expected["id"] = mock.ANY
     if server.version >= (5,):
         expected["qbuf"] = "26"
-    assert expected in res
+    if server.version >= (
+        6,
+        2,
+    ):
+        expected["laddr"] = mock.ANY
+        expected["argv_mem"] = "10"
+        expected["tot_mem"] = mock.ANY
+        expected["user"] = "default"
+        expected["redir"] = "-1"
+
+    for client_data in info:
+        if client_data["name"] == name:
+            break
+    else:
+        assert False, f"not client with {name!r} in response"
+
+    assert client_data == expected
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="No unixsocket on Windows")
@@ -70,7 +86,22 @@ async def test_client_list__unixsocket(create_redis, server, request):
         expected["id"] = mock.ANY
     if server.version >= (5,):
         expected["qbuf"] = "26"
-    assert expected in info
+    if server.version >= (
+        6,
+        2,
+    ):
+        expected["laddr"] = mock.ANY
+        expected["argv_mem"] = "10"
+        expected["tot_mem"] = mock.ANY
+        expected["user"] = "default"
+        expected["redir"] = "-1"
+
+    for client_data in info:
+        if client_data["name"] == name:
+            break
+    else:
+        assert False, f"not client with {name!r} in response"
+    assert expected == client_data
 
 
 @redis_version(2, 9, 50, reason="CLIENT PAUSE is available since redis >= 2.9.50")
@@ -132,11 +163,16 @@ async def test_command_getkeys(redis):
 
 
 @redis_version(2, 8, 13, reason="available since Redis 2.8.13")
-async def test_command_info(redis):
+async def test_command_info(redis, server):
     res = await redis.command_info("get")
-    assert res == [
-        ["get", 2, ["readonly", "fast"], 1, 1, 1],
-    ]
+    assert len(res) == 1
+    expected = ["get", 2, ["readonly", "fast"], 1, 1, 1]
+    if server.version >= (
+        6,
+        2,
+    ):
+        expected.append(["@read", "@string", "@fast"])
+    assert res[0] == expected
 
     res = await redis.command_info("unknown-command")
     assert res == [None]

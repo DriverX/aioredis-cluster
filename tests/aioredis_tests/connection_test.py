@@ -23,14 +23,12 @@ async def test_connect_tcp(request, create_connection, server):
     assert isinstance(conn.address, tuple)
     assert conn.address[0] in ("127.0.0.1", "::1")
     assert conn.address[1] == server.tcp_address.port
-    assert str(conn) == "<RedisConnection [db:0]>"
 
     conn = await create_connection(["localhost", server.tcp_address.port])
     assert conn.db == 0
     assert isinstance(conn.address, tuple)
     assert conn.address[0] in ("127.0.0.1", "::1")
     assert conn.address[1] == server.tcp_address.port
-    assert str(conn) == "<RedisConnection [db:0]>"
 
 
 async def test_connect_inject_connection_cls(request, create_connection, server):
@@ -49,7 +47,7 @@ async def test_connect_inject_connection_cls_invalid(request, create_connection,
 
 
 async def test_connect_tcp_timeout(request, create_connection, server):
-    with patch("aioredis.connection.open_connection") as open_conn_mock:
+    with patch("aioredis_cluster.aioredis.connection.open_connection") as open_conn_mock:
         open_conn_mock.side_effect = lambda *a, **kw: asyncio.sleep(0.2)
         with pytest.raises(asyncio.TimeoutError):
             await create_connection(server.tcp_address, timeout=0.1)
@@ -65,12 +63,11 @@ async def test_connect_unixsocket(create_connection, server):
     conn = await create_connection(server.unixsocket, db=0)
     assert conn.db == 0
     assert conn.address == server.unixsocket
-    assert str(conn) == "<RedisConnection [db:0]>"
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="No unixsocket on Windows")
 async def test_connect_unixsocket_timeout(create_connection, server):
-    with patch("aioredis.connection.open_unix_connection") as open_conn_mock:
+    with patch("aioredis_cluster.aioredis.connection.open_unix_connection") as open_conn_mock:
         open_conn_mock.side_effect = lambda *a, **kw: asyncio.sleep(0.2)
         with pytest.raises(asyncio.TimeoutError):
             await create_connection(server.unixsocket, db=0, timeout=0.1)
@@ -127,20 +124,20 @@ async def test_protocol_error(create_connection, server):
     assert len(conn._waiters) == 0
 
 
-def test_close_connection__tcp(create_connection, loop, server):
-    conn = loop.run_until_complete(create_connection(server.tcp_address))
+def test_close_connection__tcp(create_connection, event_loop, server):
+    conn = event_loop.run_until_complete(create_connection(server.tcp_address))
     conn.close()
     with pytest.raises(ConnectionClosedError):
-        loop.run_until_complete(conn.select(1))
+        event_loop.run_until_complete(conn.select(1))
 
-    conn = loop.run_until_complete(create_connection(server.tcp_address))
+    conn = event_loop.run_until_complete(create_connection(server.tcp_address))
     conn.close()
     fut = None
     with pytest.raises(ConnectionClosedError):
         fut = conn.select(1)
     assert fut is None
 
-    conn = loop.run_until_complete(create_connection(server.tcp_address))
+    conn = event_loop.run_until_complete(create_connection(server.tcp_address))
     conn.close()
     with pytest.raises(ConnectionClosedError):
         conn.execute_pubsub("subscribe", "channel:1")
@@ -188,7 +185,7 @@ async def test_wait_closed(create_connection, server):
     assert reader_task.done()
 
 
-async def test_cancel_wait_closed(create_connection, loop, server):
+async def test_cancel_wait_closed(create_connection, event_loop, server):
     # Regression test: Don't throw error if wait_closed() is cancelled.
     address = server.tcp_address
     conn = await create_connection(address)
@@ -198,7 +195,7 @@ async def test_cancel_wait_closed(create_connection, loop, server):
 
     # Make sure the task is cancelled
     # after it has been started by the loop.
-    loop.call_soon(task.cancel)
+    event_loop.call_soon(task.cancel)
 
     await conn.wait_closed()
     assert reader_task.done()

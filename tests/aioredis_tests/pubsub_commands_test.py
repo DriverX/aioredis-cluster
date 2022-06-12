@@ -29,9 +29,9 @@ async def test_publish(create_connection, redis, server, event_loop):
     sub.cancel()
 
 
-async def test_publish_json(create_connection, redis, server, loop):
+async def test_publish_json(create_connection, redis, server, event_loop):
     out = asyncio.Queue()
-    fut = loop.create_future()
+    fut = event_loop.create_future()
     conn = await create_connection(server.tcp_address)
     sub = asyncio.ensure_future(_reader("chan:1", out, fut, conn))
 
@@ -246,14 +246,14 @@ async def test_close_cancelled_pubsub_channel(redis):
     tsk.cancel()
 
 
-async def test_channel_get_after_close(create_redis, loop, server):
+async def test_channel_get_after_close(create_redis, event_loop, server):
     sub = await create_redis(server.tcp_address)
     pub = await create_redis(server.tcp_address)
     (ch,) = await sub.subscribe("chan:1")
 
     await pub.publish("chan:1", "message")
     assert await ch.get() == b"message"
-    loop.call_soon(sub.close)
+    event_loop.call_soon(sub.close)
     assert await ch.get() is None
     with pytest.raises(aioredis.ChannelClosedError):
         assert await ch.get()

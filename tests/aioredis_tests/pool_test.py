@@ -54,7 +54,7 @@ async def test_maxsize(maxsize, create_pool, server):
 
 
 async def test_create_connection_timeout(create_pool, server):
-    with patch("aioredis.connection.open_connection") as open_conn_mock:
+    with patch("aioredis_cluster.aioredis.connection.open_connection") as open_conn_mock:
         open_conn_mock.side_effect = lambda *a, **kw: asyncio.sleep(0.2)
         with pytest.raises(asyncio.TimeoutError):
             await create_pool(server.tcp_address, create_connection_timeout=0.1)
@@ -74,6 +74,7 @@ async def test_simple_command(create_pool, server):
         assert msg == b"hello"
         assert pool.size == 10
         assert pool.freesize == 9
+    await asyncio.sleep(0)
     assert pool.size == 10
     assert pool.freesize == 10
 
@@ -91,6 +92,7 @@ async def test_create_new(create_pool, server):
             assert pool.size == 2
             assert pool.freesize == 0
 
+    await asyncio.sleep(0)
     assert pool.size == 2
     assert pool.freesize == 2
 
@@ -119,6 +121,7 @@ async def test_create_no_minsize(create_pool, server):
 
         with pytest.raises(asyncio.TimeoutError):
             await asyncio.wait_for(pool.acquire(), timeout=0.2)
+    await asyncio.sleep(0)
     assert pool.size == 1
     assert pool.freesize == 1
 
@@ -145,6 +148,7 @@ async def test_release_closed(create_pool, server):
     with (await pool) as conn:
         conn.close()
         await conn.wait_closed()
+    await asyncio.sleep(0)
     assert pool.size == 0
     assert pool.freesize == 0
 
@@ -164,15 +168,14 @@ async def test_release_pending(create_pool, server, caplog):
                 )
             except asyncio.TimeoutError:
                 pass
+    await asyncio.sleep(0)
     assert pool.size == 0
     assert pool.freesize == 0
-    assert caplog.record_tuples == [
-        (
-            "aioredis_cluster.aioredis",
-            logging.WARNING,
-            "Connection <RedisConnection [db:0]>" " has pending commands, closing it.",
-        ),
-    ]
+
+    assert len(caplog.record_tuples) == 1
+    assert caplog.record_tuples[0][0] == "aioredis_cluster.aioredis"
+    assert caplog.record_tuples[0][1] == logging.WARNING
+    assert "has pending commands, closing it." in caplog.record_tuples[0][2]
 
 
 async def test_release_bad_connection(create_pool, create_redis, server):
@@ -204,6 +207,7 @@ async def test_change_db(create_pool, server):
 
     with (await pool) as conn:
         await conn.select(1)
+    await asyncio.sleep(0)
     assert pool.size == 0
     assert pool.freesize == 0
 
@@ -215,6 +219,7 @@ async def test_change_db(create_pool, server):
         assert pool.db == 1
         assert pool.size == 1
         assert pool.freesize == 0
+    await asyncio.sleep(0)
     assert pool.size == 0
     assert pool.freesize == 0
     assert pool.db == 1
@@ -229,6 +234,7 @@ async def test_change_db_errors(create_pool, server):
 
     with (await pool):
         pass
+    await asyncio.sleep(0)
     assert pool.size == 1
     assert pool.freesize == 1
 

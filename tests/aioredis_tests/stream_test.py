@@ -6,8 +6,8 @@ from aioredis_cluster.aioredis.stream import StreamReader
 
 
 @pytest.fixture
-def reader(loop):
-    reader = StreamReader(loop=loop)
+def reader(event_loop):
+    reader = StreamReader(loop=event_loop)
     reader.set_parser(PyReader(protocolError=ProtocolError, replyError=ReplyError))
     return reader
 

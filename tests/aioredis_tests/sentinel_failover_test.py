@@ -163,8 +163,8 @@ async def test_failover_command(start_server, start_sentinel, create_sentinel):
         "sentinel-failover-cmd",
         server,
         quorum=1,
-        down_after_milliseconds=300,
-        failover_timeout=1000,
+        down_after_milliseconds=5000,
+        failover_timeout=5000,
     )
 
     name = "master-failover-cmd"
@@ -174,14 +174,14 @@ async def test_failover_command(start_server, start_sentinel, create_sentinel):
 
     orig_master = await redis_sentinel.master_address(name)
     assert await redis_sentinel.failover(name) is True
-    await asyncio.sleep(2)
+    await asyncio.sleep(3)
 
     new_master = await redis_sentinel.master_address(name)
     assert orig_master != new_master
 
     ret = await redis_sentinel.failover(name)
     assert ret is True
-    await asyncio.sleep(2)
+    await asyncio.sleep(3)
 
     new_master = await redis_sentinel.master_address(name)
     assert orig_master == new_master

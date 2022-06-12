@@ -183,7 +183,7 @@ class RedisConnection(AbcConnection):
         self._pipeline_buffer = None
 
     def __repr__(self):
-        return "<RedisConnection [db:{}]>".format(self._db)
+        return f"<RedisConnection address:{self.address} db:{self.db}>"
 
     async def _read_data(self):
         """Response reader task."""

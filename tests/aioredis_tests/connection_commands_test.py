@@ -9,20 +9,17 @@ from aioredis_cluster.aioredis.pool import ConnectionsPool
 
 async def test_repr(create_redis, server):
     redis = await create_redis(server.tcp_address, db=1)
-    assert repr(redis) in {
-        "<Redis <RedisConnection [db:1]>>",
-        "<Redis <ConnectionsPool [db:1, size:[1:10], free:1]>>",
-    }
+    assert "db:1" in repr(redis)
 
     redis = await create_redis(server.tcp_address, db=0)
-    assert repr(redis) in {
-        "<Redis <RedisConnection [db:0]>>",
-        "<Redis <ConnectionsPool [db:0, size:[1:10], free:1]>>",
-    }
+    assert "db:0" in repr(redis)
 
 
 async def test_auth(redis):
-    expected_message = "ERR Client sent AUTH, but no password is set"
+    expected_message = (
+        "ERR (Client sent AUTH, but no password is set"
+        "|AUTH <password> called without any password configured)"
+    )
     with pytest.raises(ReplyError, match=expected_message):
         await redis.auth("")
 

@@ -130,14 +130,15 @@ class ConnectionsPool(AbcPool):
         self._pubsub_conn = None
         self._connection_cls = connection_cls
 
-    def __repr__(self):
-        return "<{} [db:{}, size:[{}:{}:{}], free:{}]>".format(
-            self.__class__.__name__,
-            self.db,
-            self.minsize,
-            self.maxsize,
-            self.size,
-            self.freesize,
+    def __repr__(self) -> str:
+        return (
+            f"<{self.__class__.__name__} "
+            f"address:{self.address}, "
+            f"db:{self.db}, "
+            f"minsize:{self.minsize}, "
+            f"maxsize:{self.maxsize}, "
+            f"size:{self.size}, "
+            f"free:{self.freesize}>"
         )
 
     @property
@@ -461,7 +462,7 @@ class ConnectionsPool(AbcPool):
     async def _wakeup(self, closing_conn=None):
         async with self._cond:
             if self._released:
-                self._pool.extend(self._released)
+                self._pool.extend(conn for conn in self._released if not conn.closed)
                 self._used.difference_update(self._released)
                 self._released.clear()
             self._cond.notify()

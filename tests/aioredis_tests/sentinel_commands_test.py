@@ -7,7 +7,7 @@ from _testutils import redis_version
 
 from aioredis_cluster.aioredis import PoolClosedError, RedisError, ReplyError
 from aioredis_cluster.aioredis.abc import AbcPool
-from aioredis_cluster.aioredis.errors import MasterReplyError
+from aioredis_cluster.aioredis.errors import AuthError, MasterReplyError
 from aioredis_cluster.aioredis.sentinel.commands import RedisSentinel
 
 
@@ -90,11 +90,16 @@ async def test_master__auth(create_sentinel, start_sentinel, start_server):
     with pytest.raises(MasterReplyError) as exc_info:
         m2 = client2.master_for(master.name)
         await m2.set("mykey", "myval")
-    if BPO_30399:
-        expected = "('Service master_1 error', AuthError('ERR invalid password'))"
+
+    if isinstance(exc_info.value.args[1], AuthError):
+        expected = ("Service master_1 error", AuthError("ERR invalid password"))
     else:
-        expected = "('Service master_1 error', AuthError('ERR invalid password',))"
-    assert str(exc_info.value) == expected
+        expected = (
+            "Service master_1 error",
+            ReplyError("WRONGPASS invalid username-password pair or user is disabled."),
+        )
+    assert exc_info.value.args[0] == expected[0]
+    assert str(exc_info.value.args[1]) == str(expected[1])
 
     with pytest.raises(MasterReplyError):
         m3 = client3.master_for(master.name)
@@ -273,6 +278,7 @@ async def test_sentinel_master_pool_size(sentinel, create_sentinel, caplog):
     caplog.clear()
     with caplog.at_level("DEBUG", "aioredis_cluster.aioredis.sentinel"):
         assert await master.ping()
+    await asyncio.sleep(0)
     assert len(caplog.record_tuples) == 1
     assert caplog.record_tuples == [
         (
