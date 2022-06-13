@@ -1,6 +1,12 @@
 Changes
 =======
 
+2.0.0 (2022-xx-xx)
+------------------
+
+* include `aioredis==1.3.1` source code into `aioredis_cluster.aioredis`
+* fix reacquire connection in `aioredic.ConnectionsPool` after Redis node failure
+* this release have not backward incompatible changes
 
 1.8.0 (2022-05-20)
 ------------------

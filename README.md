@@ -11,7 +11,6 @@ Requirements
 ------------
 
 * [Python](https://www.python.org) 3.6.5+
-* [aioredis](https://pypi.org/project/aioredis/) >=1.1, <2
 * [async_timeout](https://pypi.org/project/async_timeout/)
 * [dataclasses](https://pypi.org/project/dataclasses/) (only for Python 3.6)
 
