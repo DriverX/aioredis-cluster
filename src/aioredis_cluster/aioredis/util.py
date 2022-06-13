@@ -5,7 +5,11 @@ from urllib.parse import parse_qsl, urlparse
 from .log import logger
 
 
-_NOTSET = object()
+try:
+    from aioredis.util import _NOTSET
+except ImportError:
+    _NOTSET = object()
+
 
 IS_PY38 = sys.version_info >= (3, 8)
 

@@ -19,7 +19,11 @@ from ..util import CloseEvent
 
 
 # Address marker for discovery
-_NON_DISCOVERED = object()
+try:
+    from aioredis.sentinel.pool import _NON_DISCOVERED
+except ImportError:
+    _NON_DISCOVERED = object()
+
 
 _logger = sentinel_logger.getChild("monitor")
 
