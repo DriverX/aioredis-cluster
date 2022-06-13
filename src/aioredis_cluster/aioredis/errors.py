@@ -18,10 +18,29 @@ try:
         RedisError,
         ReplyError,
         SlaveNotFoundError,
+        SlaveReplyError,
         WatchVariableError,
     )
 except ImportError:
-    from ._errors import *  # noqa
+    from ._errors import (
+        AuthError,
+        ChannelClosedError,
+        ConnectionClosedError,
+        ConnectionForcedCloseError,
+        MasterNotFoundError,
+        MasterReplyError,
+        MaxClientsError,
+        MultiExecError,
+        PipelineError,
+        PoolClosedError,
+        ProtocolError,
+        ReadOnlyError,
+        RedisError,
+        ReplyError,
+        SlaveNotFoundError,
+        SlaveReplyError,
+        WatchVariableError,
+    )
 
 
 __all__ = (  # noqa
@@ -41,5 +60,6 @@ __all__ = (  # noqa
     "MasterNotFoundError",
     "MasterReplyError",
     "SlaveNotFoundError",
+    "SlaveReplyError",
     "ReadOnlyError",
 )
