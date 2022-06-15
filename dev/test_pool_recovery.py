@@ -5,8 +5,9 @@ from collections import deque
 from typing import Deque, Optional
 
 import async_timeout
+from aioredis import Redis, create_pool
 
-from aioredis_cluster.aioredis import Redis, create_pool
+from aioredis_cluster.pool import ConnectionsPool
 
 
 logger = logging.getLogger(__name__)
@@ -89,6 +90,7 @@ async def async_main() -> None:
         minsize=1,
         maxsize=1,
         create_connection_timeout=1.0,
+        pool_cls=ConnectionsPool,
     )
     redis = Redis(redis_pool)
     try:

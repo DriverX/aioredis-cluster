@@ -2,7 +2,7 @@ import asyncio
 from contextlib import contextmanager
 from unittest import mock
 
-from aioredis_cluster.aioredis.commands import MultiExec, Redis
+from aioredis_cluster._aioredis.commands import MultiExec, Redis
 
 
 @contextmanager

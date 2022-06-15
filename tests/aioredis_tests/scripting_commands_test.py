@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from aioredis_cluster.aioredis import ReplyError
+from aioredis_cluster._aioredis import ReplyError
 
 
 async def test_eval(redis):

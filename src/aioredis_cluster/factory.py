@@ -3,18 +3,18 @@ import warnings
 from typing import Any, List, Sequence
 
 from aioredis_cluster import aioredis
+from aioredis_cluster._aioredis.util import parse_url
 from aioredis_cluster.abc import AbcCluster
-from aioredis_cluster.aioredis.util import parse_url
 from aioredis_cluster.cluster import Cluster
 from aioredis_cluster.commands import RedisCluster, conn_is_cluster
 from aioredis_cluster.structs import Address
 from aioredis_cluster.typedef import AioredisAddress, CommandsFactory
 
 
-__all__ = [
+__all__ = (
     "create_cluster",
     "create_redis_cluster",
-]
+)
 
 
 async def create_cluster(

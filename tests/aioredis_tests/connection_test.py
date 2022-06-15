@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 from _testutils import redis_version
 
-from aioredis_cluster.aioredis import (
+from aioredis_cluster._aioredis import (
     Channel,
     ConnectionClosedError,
     MaxClientsError,
@@ -47,7 +47,7 @@ async def test_connect_inject_connection_cls_invalid(request, create_connection,
 
 
 async def test_connect_tcp_timeout(request, create_connection, server):
-    with patch("aioredis_cluster.aioredis.connection.open_connection") as open_conn_mock:
+    with patch("aioredis_cluster._aioredis.connection.open_connection") as open_conn_mock:
         open_conn_mock.side_effect = lambda *a, **kw: asyncio.sleep(0.2)
         with pytest.raises(asyncio.TimeoutError):
             await create_connection(server.tcp_address, timeout=0.1)
@@ -67,7 +67,7 @@ async def test_connect_unixsocket(create_connection, server):
 
 @pytest.mark.skipif(sys.platform == "win32", reason="No unixsocket on Windows")
 async def test_connect_unixsocket_timeout(create_connection, server):
-    with patch("aioredis_cluster.aioredis.connection.open_unix_connection") as open_conn_mock:
+    with patch("aioredis_cluster._aioredis.connection.open_unix_connection") as open_conn_mock:
         open_conn_mock.side_effect = lambda *a, **kw: asyncio.sleep(0.2)
         with pytest.raises(asyncio.TimeoutError):
             await create_connection(server.unixsocket, db=0, timeout=0.1)

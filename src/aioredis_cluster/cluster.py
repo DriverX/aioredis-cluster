@@ -20,7 +20,6 @@ from async_timeout import timeout as atimeout
 from aioredis_cluster.abc import AbcChannel, AbcCluster, AbcPool
 from aioredis_cluster.aioredis import Redis, create_pool
 from aioredis_cluster.aioredis.errors import ProtocolError, ReplyError
-from aioredis_cluster.aioredis.pool import ConnectionsPool
 from aioredis_cluster.command_exec import (
     ExecuteContext,
     ExecuteFailProps,
@@ -44,6 +43,7 @@ from aioredis_cluster.errors import (
 )
 from aioredis_cluster.log import logger
 from aioredis_cluster.manager import ClusterManager, ClusterState
+from aioredis_cluster.pool import ConnectionsPool
 from aioredis_cluster.pooler import Pooler
 from aioredis_cluster.structs import Address, ClusterNode
 from aioredis_cluster.typedef import (

@@ -4,7 +4,7 @@ import sys
 import pytest
 from _testutils import redis_version
 
-from aioredis_cluster.aioredis import ReadOnlyError, SlaveNotFoundError
+from aioredis_cluster._aioredis import ReadOnlyError, SlaveNotFoundError
 
 
 pytestmark = redis_version(2, 8, 12, reason="Sentinel v2 required")

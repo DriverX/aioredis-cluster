@@ -1,34 +1,79 @@
-from .commands import (
-    GeoMember,
-    GeoPoint,
-    Redis,
-    create_redis,
-    create_redis_pool,
-)
-from .connection import RedisConnection, create_connection
-from .errors import (
-    AuthError,
-    ChannelClosedError,
-    ConnectionClosedError,
-    ConnectionForcedCloseError,
-    ConnectTimeoutError,
-    MasterNotFoundError,
-    MasterReplyError,
-    MaxClientsError,
-    MultiExecError,
-    PipelineError,
-    PoolClosedError,
-    ProtocolError,
-    ReadOnlyError,
-    RedisError,
-    ReplyError,
-    SlaveNotFoundError,
-    SlaveReplyError,
-    WatchVariableError,
-)
-from .pool import ConnectionsPool, create_pool
-from .pubsub import Channel
-from .sentinel import RedisSentinel, create_sentinel
+try:
+    from aioredis.commands import (
+        GeoMember,
+        GeoPoint,
+        Redis,
+        create_redis,
+        create_redis_pool,
+    )
+except ImportError:
+    from .._aioredis.commands import (
+        GeoMember,
+        GeoPoint,
+        Redis,
+        create_redis,
+        create_redis_pool,
+    )
+
+try:
+    from aioredis.connection import RedisConnection, create_connection
+except ImportError:
+    from .._aioredis.connection import RedisConnection, create_connection
+
+try:
+    from aioredis.errors import (
+        AuthError,
+        ChannelClosedError,
+        ConnectionClosedError,
+        ConnectionForcedCloseError,
+        ConnectTimeoutError,
+        MasterNotFoundError,
+        MasterReplyError,
+        MaxClientsError,
+        MultiExecError,
+        PipelineError,
+        PoolClosedError,
+        ProtocolError,
+        ReadOnlyError,
+        RedisError,
+        ReplyError,
+        SlaveNotFoundError,
+        SlaveReplyError,
+        WatchVariableError,
+    )
+except ImportError:
+    from .._aioredis.errors import (
+        AuthError,
+        ChannelClosedError,
+        ConnectionClosedError,
+        ConnectionForcedCloseError,
+        ConnectTimeoutError,
+        MasterNotFoundError,
+        MasterReplyError,
+        MaxClientsError,
+        MultiExecError,
+        PipelineError,
+        PoolClosedError,
+        ProtocolError,
+        ReadOnlyError,
+        RedisError,
+        ReplyError,
+        SlaveNotFoundError,
+        SlaveReplyError,
+        WatchVariableError,
+    )
+try:
+    from aioredis.pool import ConnectionsPool, create_pool
+except ImportError:
+    from .._aioredis.pool import ConnectionsPool, create_pool
+try:
+    from aioredis.pubsub import Channel
+except ImportError:
+    from .._aioredis.pubsub import Channel
+try:
+    from aioredis.sentinel import RedisSentinel, create_sentinel
+except ImportError:
+    from .._aioredis.sentinel import RedisSentinel, create_sentinel
 
 
 __version__ = "1.3.1"

@@ -5,7 +5,7 @@ from unittest import mock
 import pytest
 from _testutils import redis_version
 
-from aioredis_cluster.aioredis import ReplyError
+from aioredis_cluster._aioredis import ReplyError
 
 
 async def test_client_list(redis, server, request):

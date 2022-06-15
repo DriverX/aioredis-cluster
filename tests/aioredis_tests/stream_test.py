@@ -1,8 +1,8 @@
 import pytest
 
-from aioredis_cluster.aioredis.errors import ProtocolError, ReplyError
-from aioredis_cluster.aioredis.parser import PyReader
-from aioredis_cluster.aioredis.stream import StreamReader
+from aioredis_cluster._aioredis.errors import ProtocolError, ReplyError
+from aioredis_cluster._aioredis.parser import PyReader
+from aioredis_cluster._aioredis.stream import StreamReader
 
 
 @pytest.fixture

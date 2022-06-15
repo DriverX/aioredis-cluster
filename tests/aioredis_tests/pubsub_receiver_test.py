@@ -6,9 +6,9 @@ from unittest import mock
 
 import pytest
 
-from aioredis_cluster.aioredis import ChannelClosedError
-from aioredis_cluster.aioredis.abc import AbcChannel
-from aioredis_cluster.aioredis.pubsub import Receiver, _Sender
+from aioredis_cluster._aioredis import ChannelClosedError
+from aioredis_cluster._aioredis.abc import AbcChannel
+from aioredis_cluster._aioredis.pubsub import Receiver, _Sender
 
 
 def test_listener_channel():

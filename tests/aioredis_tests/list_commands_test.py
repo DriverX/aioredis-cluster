@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from aioredis_cluster.aioredis import ReplyError
+from aioredis_cluster._aioredis import ReplyError
 
 
 async def push_data_with_sleep(redis, key, *values):

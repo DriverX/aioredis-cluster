@@ -1,6 +1,6 @@
 import pytest
 
-from aioredis_cluster.aioredis.util import coerced_keys_dict
+from aioredis_cluster._aioredis.util import coerced_keys_dict
 
 
 def test_simple():

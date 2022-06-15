@@ -1,6 +1,6 @@
 import pytest
 
-from aioredis_cluster.aioredis.util import encode_command
+from aioredis_cluster._aioredis.util import encode_command
 
 
 def test_encode_bytes():

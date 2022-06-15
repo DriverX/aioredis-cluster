@@ -5,10 +5,10 @@ import sys
 import pytest
 from _testutils import redis_version
 
-from aioredis_cluster.aioredis import PoolClosedError, RedisError, ReplyError
-from aioredis_cluster.aioredis.abc import AbcPool
-from aioredis_cluster.aioredis.errors import AuthError, MasterReplyError
-from aioredis_cluster.aioredis.sentinel.commands import RedisSentinel
+from aioredis_cluster._aioredis import PoolClosedError, RedisError, ReplyError
+from aioredis_cluster._aioredis.abc import AbcPool
+from aioredis_cluster._aioredis.errors import AuthError, MasterReplyError
+from aioredis_cluster._aioredis.sentinel.commands import RedisSentinel
 
 
 pytestmark = redis_version(2, 8, 12, reason="Sentinel v2 required")
