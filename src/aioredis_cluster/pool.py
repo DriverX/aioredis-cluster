@@ -38,6 +38,7 @@ class ConnectionsPool(AbcPool):
         parser=None,
         create_connection_timeout: float = None,
         connection_cls=None,
+        loop: asyncio.AbstractEventLoop = None,
     ):
         assert isinstance(minsize, int) and minsize >= 0, (
             "minsize must be int >= 0",
