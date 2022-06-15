@@ -5,15 +5,6 @@ class RedisError(Exception):
     """Base exception class for aioredis exceptions."""
 
 
-class ConnectTimeoutError(RedisError):
-    """Raises than connect to redis is timed out"""
-
-    def __init__(self, address) -> None:
-        super().__init__(address)
-
-        self.address = address
-
-
 class ProtocolError(RedisError):
     """Raised when protocol error occurs."""
 

@@ -1,4 +1,3 @@
-from aioredis_cluster._aioredis.errors import ConnectTimeoutError
 from aioredis_cluster.aioredis.errors import (
     ConnectionClosedError,
     PoolClosedError,
@@ -20,6 +19,15 @@ __all__ = [
     "ClusterDownError",
     "LoadingError",
 ]
+
+
+class ConnectTimeoutError(RedisError):
+    """Raises than connect to redis is timed out"""
+
+    def __init__(self, address) -> None:
+        super().__init__(address)
+
+        self.address = address
 
 
 class RedisClusterError(RedisError):

@@ -2,13 +2,13 @@ import asyncio
 
 import mock
 import pytest
-from aioredis import (
+
+from aioredis_cluster.aioredis import (
     ConnectionClosedError,
     ConnectionForcedCloseError,
     PoolClosedError,
     ProtocolError,
 )
-
 from aioredis_cluster.cluster import Cluster
 from aioredis_cluster.command_info import default_registry
 from aioredis_cluster.commands import RedisCluster

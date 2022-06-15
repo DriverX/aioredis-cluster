@@ -5,8 +5,8 @@ import types
 import warnings
 
 from .abc import AbcPool
-from .connection import _PUBSUB_COMMANDS, RedisConnection, create_connection
-from .errors import ConnectTimeoutError, PoolClosedError
+from .connection import _PUBSUB_COMMANDS, create_connection
+from .errors import PoolClosedError
 from .log import logger
 from .util import CloseEvent, parse_url
 
@@ -122,7 +122,6 @@ class ConnectionsPool(AbcPool):
         self._minsize = minsize
         self._create_connection_timeout = create_connection_timeout
         self._pool = collections.deque(maxlen=maxsize)
-        self._released = collections.deque(maxlen=maxsize)
         self._used = set()
         self._acquiring = 0
         self._cond = asyncio.Condition(lock=asyncio.Lock())
@@ -130,15 +129,9 @@ class ConnectionsPool(AbcPool):
         self._pubsub_conn = None
         self._connection_cls = connection_cls
 
-    def __repr__(self) -> str:
-        return (
-            f"<{self.__class__.__name__} "
-            f"address:{self.address}, "
-            f"db:{self.db}, "
-            f"minsize:{self.minsize}, "
-            f"maxsize:{self.maxsize}, "
-            f"size:{self.size}, "
-            f"free:{self.freesize}>"
+    def __repr__(self):
+        return "<{} [db:{}, size:[{}:{}], free:{}]>".format(
+            self.__class__.__name__, self.db, self.minsize, self.maxsize, self.freesize
         )
 
     @property
@@ -357,21 +350,11 @@ class ConnectionsPool(AbcPool):
         """
         if self.closed:
             raise PoolClosedError("Pool is closed")
-
         async with self._cond:
             if self.closed:
                 raise PoolClosedError("Pool is closed")
-
-            acquire_after_wait = False
             while True:
-                try:
-                    await self._fill_free(override_min=True)
-                except (asyncio.CancelledError, Exception):
-                    if acquire_after_wait:
-                        acquire_after_wait = False
-                        self._cond.notify()
-                    raise
-
+                await self._fill_free(override_min=True)
                 if self.freesize:
                     conn = self._pool.popleft()
                     assert not conn.closed, conn
@@ -380,7 +363,6 @@ class ConnectionsPool(AbcPool):
                     return conn
                 else:
                     await self._cond.wait()
-                    acquire_after_wait = True
 
     def release(self, conn):
         """Returns used connection back into pool.
@@ -390,7 +372,7 @@ class ConnectionsPool(AbcPool):
         When queue of free connections is full the connection will be dropped.
         """
         assert conn in self._used, ("Invalid connection, maybe from other pool", conn)
-        self._released.append(conn)
+        self._used.remove(conn)
         if not conn.closed:
             if conn.in_transaction:
                 logger.warning("Connection %r is in transaction, closing it.", conn)
@@ -402,7 +384,9 @@ class ConnectionsPool(AbcPool):
                 logger.warning("Connection %r has pending commands, closing it.", conn)
                 conn.close()
             elif conn.db == self.db:
-                if not (self.maxsize and self.freesize < self.maxsize):
+                if self.maxsize and self.freesize < self.maxsize:
+                    self._pool.append(conn)
+                else:
                     # consider this connection as old and close it.
                     conn.close()
             else:
@@ -447,27 +431,20 @@ class ConnectionsPool(AbcPool):
                     # connection may be closed at yield point
                     self._drop_closed()
 
-    async def _create_new_connection(self, address) -> RedisConnection:
-        try:
-            return await create_connection(
-                address,
-                db=self._db,
-                password=self._password,
-                ssl=self._ssl,
-                encoding=self._encoding,
-                parser=self._parser_class,
-                timeout=self._create_connection_timeout,
-                connection_cls=self._connection_cls,
-            )
-        except asyncio.TimeoutError:
-            raise ConnectTimeoutError(address)
+    def _create_new_connection(self, address):
+        return create_connection(
+            address,
+            db=self._db,
+            password=self._password,
+            ssl=self._ssl,
+            encoding=self._encoding,
+            parser=self._parser_class,
+            timeout=self._create_connection_timeout,
+            connection_cls=self._connection_cls,
+        )
 
     async def _wakeup(self, closing_conn=None):
         async with self._cond:
-            if self._released:
-                self._pool.extend(conn for conn in self._released if not conn.closed)
-                self._used.difference_update(self._released)
-                self._released.clear()
             self._cond.notify()
         if closing_conn is not None:
             await closing_conn.wait_closed()
