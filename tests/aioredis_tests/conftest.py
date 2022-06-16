@@ -370,7 +370,8 @@ def start_server(_proc, request, unused_port, server_bin):
             for _ in timeout(10):
                 if proc.poll() is not None and proc.returncode != 0:
                     f.seek(0)
-                    print(f.read(), file=sys.stderr)
+                    print('args:', args, file=sys.stderr)
+                    print('out:', f.read(), file=sys.stderr)
                     raise RuntimeError("Process terminated")
                 log = f.readline()
                 if log and verbose:
