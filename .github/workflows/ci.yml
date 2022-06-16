@@ -89,19 +89,42 @@ jobs:
   #       env:
   #         REDIS_CLUSTER_STARTUP_NODES: 'redis://localhost:7000'
 
+  aioredis_tests_need_run:
+    runs-on: ubuntu-latest
+    outputs:
+      need_run: ${{ steps.changes.outputs.src }}
+    steps:
+      - uses: dorny/paths-filter@v2
+        id: changes
+        with:
+          filters: |
+            src:
+              - '.github/workflows/**'
+              - 'src/aioredis_cluster/_aioredis/**'
+              - 'tests/aioredis_tests/**'
+
   aioredis_tests:
+    needs:
+      - aioredis_tests_need_run
+    if: needs.aioredis_tests_need_run.outputs.need_run == 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
         redis-version:
-          - '3.2.13'
-          - '4.0.14'
-          - '5.0.9'
-          - '6.0.12'
+          # - '3.2.13'
+          # - '4.0.14'
+          # - '5.0.9'
+          # - '6.0.12'
           - '6.2.6'
           - '7.0.2'
     steps:
       - uses: actions/checkout@v3
+      - uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            workflows:
+              - '.github/workflows/**'
       - name: 'Set up Python'
         uses: actions/setup-python@v4
         with:
