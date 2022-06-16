@@ -11,83 +11,83 @@ on:
       - master
 
 jobs:
-  # tests:
-  #   runs-on: ubuntu-latest
-  #   strategy:
-  #     matrix:
-  #       python-version:
-  #         - '3.6'
-  #         - '3.7'
-  #         - '3.8'
-  #         - '3.9'
-  #       with_aioredis:
-  #         - 'yes'
-  #         - 'no'
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version:
+          - '3.6'
+          - '3.7'
+          - '3.8'
+          - '3.9'
+        with_aioredis:
+          - 'yes'
+          - 'no'
 
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #     - name: 'Set up Python ${{ matrix.python-version }} (aioredis: ${{ matrix.with_aioredis }})'
-  #       uses: actions/setup-python@v4
-  #       with:
-  #         python-version: ${{ matrix.python-version }}
-  #     - name: Install dependencies
-  #       run: |
-  #         python -m pip install -U pip setuptools
-  #         if [ "${{ matrix.with_aioredis }}" == "yes" ]; then
-  #           python -m pip install -Ue '.[devel,aioredis]';
-  #         else
-  #           python -m pip install -Ue '.[devel]'
-  #         fi
-  #     - name: Lint with flake8
-  #       run: |
-  #         make flake
-  #     - name: Lint with black
-  #       run: |
-  #         make black-check
-  #     - name: Lint with mypy
-  #       run: |
-  #         make mypy
-  #     - name: Test with pytest
-  #       run: |
-  #         make tests
+    steps:
+      - uses: actions/checkout@v3
+      - name: 'Set up Python ${{ matrix.python-version }} (aioredis: ${{ matrix.with_aioredis }})'
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          python -m pip install -U pip setuptools
+          if [ "${{ matrix.with_aioredis }}" == "yes" ]; then
+            python -m pip install -Ue '.[devel,aioredis]';
+          else
+            python -m pip install -Ue '.[devel]'
+          fi
+      - name: Lint with flake8
+        run: |
+          make flake
+      - name: Lint with black
+        run: |
+          make black-check
+      - name: Lint with mypy
+        run: |
+          make mypy
+      - name: Test with pytest
+        run: |
+          make tests
 
-  # system_tests:
-  #   runs-on: ubuntu-latest
-  #   strategy:
-  #     matrix:
-  #       redis-version:
-  #         - '5.0.9'
-  #         - '6.0.12'
-  #         - '6.2.1'
-  #       with_aioredis:
-  #         - 'yes'
-  #         - 'no'
+  system_tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        redis-version:
+          - '5.0.9'
+          - '6.0.12'
+          - '6.2.1'
+        with_aioredis:
+          - 'yes'
+          - 'no'
 
-  #   services:
-  #     redis:
-  #       image: grokzen/redis-cluster:${{ matrix.redis-version }}
-  #       ports:
-  #         - 7000-7007:7000-7007
+    services:
+      redis:
+        image: grokzen/redis-cluster:${{ matrix.redis-version }}
+        ports:
+          - 7000-7007:7000-7007
 
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #     - name: 'Set up Python'
-  #       uses: actions/setup-python@v4
-  #       with:
-  #         python-version: 3.8
-  #     - name: 'Install dependencies (aioredis: ${{ matrix.with_aioredis }})'
-  #       run: |
-  #         python -m pip install -U pip setuptools
-  #         if [ "${{ matrix.with_aioredis }}" == "yes" ]; then
-  #           python -m pip install -Ue '.[devel,aioredis]';
-  #         else
-  #           python -m pip install -Ue '.[devel]'
-  #         fi
-  #     - name: Test with pytest and redis(v${{ matrix.redis-version }})
-  #       run: |
-  #         pytest tests/system_tests
-  #       env:
-  #         REDIS_CLUSTER_STARTUP_NODES: 'redis://localhost:7000'
+    steps:
+      - uses: actions/checkout@v3
+      - name: 'Set up Python'
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.8
+      - name: 'Install dependencies (aioredis: ${{ matrix.with_aioredis }})'
+        run: |
+          python -m pip install -U pip setuptools
+          if [ "${{ matrix.with_aioredis }}" == "yes" ]; then
+            python -m pip install -Ue '.[devel,aioredis]';
+          else
+            python -m pip install -Ue '.[devel]'
+          fi
+      - name: Test with pytest and redis(v${{ matrix.redis-version }})
+        run: |
+          pytest tests/system_tests
+        env:
+          REDIS_CLUSTER_STARTUP_NODES: 'redis://localhost:7000'
 
   aioredis_tests_need_run:
     runs-on: ubuntu-latest
@@ -111,10 +111,10 @@ jobs:
     strategy:
       matrix:
         redis-version:
-          # - '3.2.13'
-          # - '4.0.14'
-          # - '5.0.9'
-          # - '6.0.12'
+          - '3.2.13'
+          - '4.0.14'
+          - '5.0.9'
+          - '6.0.12'
           - '6.2.6'
           - '7.0.2'
     steps:
@@ -140,57 +140,56 @@ jobs:
           python -m pip install -Ue '.[devel]'
       - name: Run tests aioredis_cluster._aioredis
         run: |
-          pytest -x -vv tests/aioredis_tests
+          pytest tests/aioredis_tests
 
+  pre-deploy:
+    runs-on: ubuntu-latest
+    needs:
+      - tests
+      - system_tests
 
-  # pre-deploy:
-  #   runs-on: ubuntu-latest
-  #   needs:
-  #     - tests
-  #     - system_tests
+    # Run only on pushing a version tag
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Dummy
+        run: |
+            echo "Predeploy step"
 
-  #   # Run only on pushing a version tag
-  #   if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-  #   steps:
-  #     - name: Dummy
-  #       run: |
-  #           echo "Predeploy step"
+  build-packages:
+    needs:
+      - pre-deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.8
+      - name: Build distrib
+        run: |
+          VERSION=$(echo '${{ github.ref }}' | cut -d"/" -f3 | cut -c2-)
+          echo $VERSION
+          make dist VERSION="$VERSION"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: dist
+          path: dist
 
-  # build-packages:
-  #   needs:
-  #     - pre-deploy
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #     - name: Set up Python
-  #       uses: actions/setup-python@v4
-  #       with:
-  #         python-version: 3.8
-  #     - name: Build distrib
-  #       run: |
-  #         VERSION=$(echo '${{ github.ref }}' | cut -d"/" -f3 | cut -c2-)
-  #         echo $VERSION
-  #         make dist VERSION="$VERSION"
-  #     - name: Upload artifacts
-  #       uses: actions/upload-artifact@v2
-  #       with:
-  #         name: dist
-  #         path: dist
-
-  # deploy:
-  #   name: Deploy
-  #   needs:
-  #     - build-packages
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Download dists
-  #       uses: actions/download-artifact@v2
-  #       with:
-  #         name: dist
-  #         path: dist
-  #     - name: Publish package
-  #       uses: pypa/gh-action-pypi-publish@master
-  #       with:
-  #         user: __token__
-  #         password: ${{ secrets.PYPI_TOKEN }}
-  #         # repository_url: https://test.pypi.org/legacy/
+  deploy:
+    name: Deploy
+    needs:
+      - build-packages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download dists
+        uses: actions/download-artifact@v2
+        with:
+          name: dist
+          path: dist
+      - name: Publish package
+        uses: pypa/gh-action-pypi-publish@master
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_TOKEN }}
+          # repository_url: https://test.pypi.org/legacy/
