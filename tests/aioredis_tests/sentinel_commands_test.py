@@ -73,7 +73,7 @@ async def test_master_info(redis_sentinel, sentinel):
         assert "link-refcount" in info
 
 
-async def test_master__auth(create_sentinel, start_sentinel, start_server):
+async def test_master__auth(mocker, create_sentinel, start_sentinel, start_server):
     master = start_server("master_1", password="123")
     start_server("slave_1", slaveof=master, password="123")
 

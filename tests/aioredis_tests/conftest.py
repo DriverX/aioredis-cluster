@@ -286,7 +286,7 @@ def start_server(_proc, request, unused_port, server_bin):
         raise RuntimeError("Redis startup timeout expired")
 
     def maker(name, config_lines=None, *, slaveof=None, password=None):
-        assert slaveof is None or isinstance(slaveof, RedisServer), slaveof
+        # assert slaveof is None or isinstance(slaveof, RedisServer), slaveof
         if name in servers:
             return servers[name]
 
@@ -324,10 +324,30 @@ def start_server(_proc, request, unused_port, server_bin):
                         write("slaveof {0.tcp_address.host} {0.tcp_address.port}".format(slaveof))
                     if password:
                         write('masterauth "{}"'.format(password))
-            args = [config]
+            args = [server_bin, config]
             tmp_files.append(config)
         else:
-            args = [
+            args = [server_bin]
+            if password:
+                args += [
+                    "--requirepass",
+                    f"{password}",
+                ]
+            if slaveof is not None:
+                if version >= (7, 0):
+                    args += ["--replicaof"]
+                else:
+                    args += ["--slaveof"]
+                args += [
+                    str(slaveof.tcp_address.host),
+                    str(slaveof.tcp_address.port),
+                ]
+                if password:
+                    args += [
+                        "--masterauth",
+                        f"{password}",
+                    ]
+            args += [
                 "--daemonize",
                 "no",
                 "--save",
@@ -339,48 +359,37 @@ def start_server(_proc, request, unused_port, server_bin):
                 "--port",
                 str(port),
             ]
+
             if unixsocket:
                 args += [
                     "--unixsocket",
                     unixsocket,
                 ]
-            if password:
-                args += ['--requirepass "{}"'.format(password)]
-            if slaveof is not None:
-                if version >= (7, 0):
-                    args += ["--replicaof"]
-                else:
-                    args += ["--slaveof"]
-                args += [
-                    str(slaveof.tcp_address.host),
-                    str(slaveof.tcp_address.port),
-                ]
-                if password:
-                    args += ['--masterauth "{}"'.format(password)]
         f = open(stdout_file, "w")
         atexit.register(f.close)
         proc = _proc(
-            server_bin,
             *args,
+            shell=False,
             stdout=f,
             stderr=subprocess.STDOUT,
             _clear_tmp_files=tmp_files,
         )
-        with open(stdout_file, "rt") as f:
+
+        with open(stdout_file, "rt") as f_ro:
             for _ in timeout(10):
                 if proc.poll() is not None and proc.returncode != 0:
-                    f.seek(0)
-                    print('args:', args, file=sys.stderr)
-                    print('out:', f.read(), file=sys.stderr)
+                    f_ro.seek(0)
+                    print("args:", server_bin, " ".join(args), file=sys.stderr)
+                    print("out:", f_ro.read(), file=sys.stderr)
                     raise RuntimeError("Process terminated")
-                log = f.readline()
+                log = f_ro.readline()
                 if log and verbose:
                     print(name, ":", log, end="")
                 if "The server is now ready to accept connections " in log:
                     break
             if slaveof is not None:
                 for _ in timeout(10):
-                    log = f.readline()
+                    log = f_ro.readline()
                     if log and verbose:
                         print(name, ":", log, end="")
                     if "sync: Finished with success" in log:
@@ -423,9 +432,7 @@ def start_sentinel(_proc, request, unused_port, server_bin):
         config = os.path.join(data_dir, "aioredis-sentinel.{}.conf".format(port))
         stdout_file = os.path.join(data_dir, "aioredis-sentinel.{}.stdout".format(port))
         tmp_files = [config, stdout_file]
-        if sys.platform == "win32":
-            unixsocket = None
-        else:
+        if sys.platform != "win32":
             unixsocket = os.path.join(data_dir, "aioredis-sentinel.{}.sock".format(port))
             tmp_files.append(unixsocket)
 
@@ -455,15 +462,21 @@ def start_sentinel(_proc, request, unused_port, server_bin):
         # XXX: wait sentinel see all masters and slaves;
         all_masters = {m.name for m in masters}
         if noslaves:
-            all_slaves = {}
+            all_slaves = set()
         else:
             all_slaves = {m.name for m in masters}
         with open(stdout_file, "rt") as f:
             for _ in timeout(30):
                 assert proc.poll() is None, ("Process terminated", proc.returncode)
                 log = f.readline()
-                if log and verbose:
+
+                if not log:
+                    time.sleep(0.5)
+                    continue
+
+                if verbose:
                     print(name, ":", log, end="")
+
                 for m in masters:
                     if "# +monitor master {}".format(m.name) in log:
                         all_masters.discard(m.name)
