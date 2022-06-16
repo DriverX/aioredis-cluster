@@ -16,9 +16,6 @@ from aioredis_cluster._aioredis import (
 )
 
 
-BPO_34638 = sys.version_info >= (3, 8)
-
-
 def _assert_defaults(pool):
     assert isinstance(pool, ConnectionsPool)
     assert pool.minsize == 1
@@ -474,21 +471,7 @@ async def test_pool_idle_close(create_pool, start_server, caplog):
             "Connection has been closed by server, response: None",
         ),
     ]
-    if BPO_34638:
-        expected += [
-            (
-                "aioredis_cluster.asyncio",
-                logging.ERROR,
-                "An open stream object is being garbage collected; "
-                'call "stream.close()" explicitly.',
-            ),
-            (
-                "aioredis_cluster.asyncio",
-                logging.ERROR,
-                "An open stream object is being garbage collected; "
-                'call "stream.close()" explicitly.',
-            ),
-        ]
+
     # The order in which logs are collected differs each time.
     assert sorted(caplog.record_tuples) == sorted(expected)
 
