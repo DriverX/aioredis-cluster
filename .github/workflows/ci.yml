@@ -147,6 +147,7 @@ jobs:
     needs:
       - tests
       - system_tests
+      - aioredis_tests
 
     # Run only on pushing a version tag
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
