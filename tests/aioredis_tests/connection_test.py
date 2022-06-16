@@ -1,8 +1,7 @@
 import asyncio
 import sys
-from unittest import mock
-from unittest.mock import patch
 
+import mock
 import pytest
 from _testutils import redis_version
 
@@ -46,11 +45,21 @@ async def test_connect_inject_connection_cls_invalid(request, create_connection,
         await create_connection(server.tcp_address, connection_cls=type)
 
 
-async def test_connect_tcp_timeout(request, create_connection, server):
-    with patch("aioredis_cluster._aioredis.connection.open_connection") as open_conn_mock:
-        open_conn_mock.side_effect = lambda *a, **kw: asyncio.sleep(0.2)
-        with pytest.raises(asyncio.TimeoutError):
-            await create_connection(server.tcp_address, timeout=0.1)
+async def test_connect_tcp_timeout(mocker, request, create_connection, server):
+    async def open_conn_fe(*args, **kwargs):
+        await asyncio.sleep(0.2)
+        return object(), object()
+
+    open_conn_mock = mocker.patch(
+        "aioredis_cluster._aioredis.connection.open_connection",
+        new=mock.AsyncMock(
+            side_effect=open_conn_fe,
+        ),
+    )
+
+    with pytest.raises(asyncio.TimeoutError):
+        await create_connection(server.tcp_address, timeout=0.1)
+    open_conn_mock.assert_awaited_once()
 
 
 async def test_connect_tcp_invalid_timeout(request, create_connection, server):
@@ -66,11 +75,21 @@ async def test_connect_unixsocket(create_connection, server):
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="No unixsocket on Windows")
-async def test_connect_unixsocket_timeout(create_connection, server):
-    with patch("aioredis_cluster._aioredis.connection.open_unix_connection") as open_conn_mock:
-        open_conn_mock.side_effect = lambda *a, **kw: asyncio.sleep(0.2)
-        with pytest.raises(asyncio.TimeoutError):
-            await create_connection(server.unixsocket, db=0, timeout=0.1)
+async def test_connect_unixsocket_timeout(mocker, create_connection, server):
+    async def open_conn_fe(*args, **kwargs):
+        await asyncio.sleep(0.2)
+        return object(), object()
+
+    open_conn_mock = mocker.patch(
+        "aioredis_cluster._aioredis.connection.open_unix_connection",
+        new=mock.AsyncMock(
+            side_effect=open_conn_fe,
+        ),
+    )
+
+    with pytest.raises(asyncio.TimeoutError):
+        await create_connection(server.unixsocket, db=0, timeout=0.1)
+    open_conn_mock.assert_awaited_once()
 
 
 @redis_version(2, 8, 0, reason="maxclients config setting")

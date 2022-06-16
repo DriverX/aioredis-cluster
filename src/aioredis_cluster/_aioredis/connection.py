@@ -122,9 +122,11 @@ async def create_connection(
     if isinstance(address, (list, tuple)):
         host, port = address
         logger.debug("Creating tcp connection to %r", address)
-        reader, writer = await asyncio.wait_for(
+        rw = await asyncio.wait_for(
             open_connection(host, port, limit=MAX_CHUNK_SIZE, ssl=ssl), timeout
         )
+        print("RW", rw)
+        reader, writer = rw
         sock = writer.transport.get_extra_info("socket")
         if sock is not None:
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)

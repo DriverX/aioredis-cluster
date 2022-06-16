@@ -1,9 +1,9 @@
 import asyncio
 import logging
 import sys
-from unittest.mock import patch
 
 import async_timeout
+import mock
 import pytest
 from _testutils import redis_version
 
@@ -53,11 +53,20 @@ async def test_maxsize(maxsize, create_pool, server):
         await create_pool(server.tcp_address, minsize=2, maxsize=maxsize)
 
 
-async def test_create_connection_timeout(create_pool, server):
-    with patch("aioredis_cluster._aioredis.connection.open_connection") as open_conn_mock:
-        open_conn_mock.side_effect = lambda *a, **kw: asyncio.sleep(0.2)
-        with pytest.raises(TimeoutError):
-            await create_pool(server.tcp_address, create_connection_timeout=0.1)
+async def test_create_connection_timeout(mocker, create_pool, server):
+    async def open_conn_fe(*args, **kwargs):
+        await asyncio.sleep(0.2)
+        return object(), object()
+
+    open_conn_mock = mocker.patch(
+        "aioredis_cluster._aioredis.connection.open_connection",
+        new=mock.AsyncMock(
+            side_effect=open_conn_fe,
+        ),
+    )
+    with pytest.raises(TimeoutError):
+        await create_pool(server.tcp_address, create_connection_timeout=0.1)
+    open_conn_mock.assert_awaited_once()
 
 
 def test_no_yield_from(pool):
