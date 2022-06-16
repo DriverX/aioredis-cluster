@@ -112,18 +112,13 @@ jobs:
         with:
           redis-version: '${{ matrix.redis-version }}'
           auto-start: 'false'
-      - name: redis test
+      - name: 'Install dependencies'
         run: |
-          command -v redis-server || true
-          redis-server -v
-      # - name: 'Install dependencies (aioredis: ${{ matrix.with_aioredis }})'
-      #   run: |
-      #     python -m pip install -U pip setuptools
-      #     if [ "${{ matrix.with_aioredis }}" == "yes" ]; then
-      #       python -m pip install -Ue '.[devel,aioredis]';
-      #     else
-      #       python -m pip install -Ue '.[devel]'
-      #     fi
+          python -m pip install -U pip setuptools
+          python -m pip install -Ue '.[devel]'
+      - name: Run tests aioredis_cluster._aioredis
+        run: |
+          pytest tests/aioredis_tests
 
 
   # pre-deploy:
