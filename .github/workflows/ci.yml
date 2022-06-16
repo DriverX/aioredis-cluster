@@ -114,7 +114,7 @@ jobs:
           auto-start: 'false'
       - name: redis test
         run: |
-          command redis-server
+          command -v redis-server || true
           redis-server -v
       # - name: 'Install dependencies (aioredis: ${{ matrix.with_aioredis }})'
       #   run: |
