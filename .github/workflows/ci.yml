@@ -11,83 +11,120 @@ on:
       - master
 
 jobs:
-  tests:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version:
-          - '3.6'
-          - '3.7'
-          - '3.8'
-          - '3.9'
-        with_aioredis:
-          - 'yes'
-          - 'no'
+  # tests:
+  #   runs-on: ubuntu-latest
+  #   strategy:
+  #     matrix:
+  #       python-version:
+  #         - '3.6'
+  #         - '3.7'
+  #         - '3.8'
+  #         - '3.9'
+  #       with_aioredis:
+  #         - 'yes'
+  #         - 'no'
 
-    steps:
-      - uses: actions/checkout@v3
-      - name: 'Set up Python ${{ matrix.python-version }} (aioredis: ${{ matrix.with_aioredis }})'
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install dependencies
-        run: |
-          python -m pip install -U pip setuptools
-          if [ "${{ matrix.with_aioredis }}" == "yes" ]; then
-            python -m pip install -Ue '.[devel,aioredis]';
-          else
-            python -m pip install -Ue '.[devel]'
-          fi
-      - name: Lint with flake8
-        run: |
-          make flake
-      - name: Lint with black
-        run: |
-          make black-check
-      - name: Lint with mypy
-        run: |
-          make mypy
-      - name: Test with pytest
-        run: |
-          make tests
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - name: 'Set up Python ${{ matrix.python-version }} (aioredis: ${{ matrix.with_aioredis }})'
+  #       uses: actions/setup-python@v4
+  #       with:
+  #         python-version: ${{ matrix.python-version }}
+  #     - name: Install dependencies
+  #       run: |
+  #         python -m pip install -U pip setuptools
+  #         if [ "${{ matrix.with_aioredis }}" == "yes" ]; then
+  #           python -m pip install -Ue '.[devel,aioredis]';
+  #         else
+  #           python -m pip install -Ue '.[devel]'
+  #         fi
+  #     - name: Lint with flake8
+  #       run: |
+  #         make flake
+  #     - name: Lint with black
+  #       run: |
+  #         make black-check
+  #     - name: Lint with mypy
+  #       run: |
+  #         make mypy
+  #     - name: Test with pytest
+  #       run: |
+  #         make tests
 
-  system_tests:
+  # system_tests:
+  #   runs-on: ubuntu-latest
+  #   strategy:
+  #     matrix:
+  #       redis-version:
+  #         - '5.0.9'
+  #         - '6.0.12'
+  #         - '6.2.1'
+  #       with_aioredis:
+  #         - 'yes'
+  #         - 'no'
+
+  #   services:
+  #     redis:
+  #       image: grokzen/redis-cluster:${{ matrix.redis-version }}
+  #       ports:
+  #         - 7000-7007:7000-7007
+
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - name: 'Set up Python'
+  #       uses: actions/setup-python@v4
+  #       with:
+  #         python-version: 3.8
+  #     - name: 'Install dependencies (aioredis: ${{ matrix.with_aioredis }})'
+  #       run: |
+  #         python -m pip install -U pip setuptools
+  #         if [ "${{ matrix.with_aioredis }}" == "yes" ]; then
+  #           python -m pip install -Ue '.[devel,aioredis]';
+  #         else
+  #           python -m pip install -Ue '.[devel]'
+  #         fi
+  #     - name: Test with pytest and redis(v${{ matrix.redis-version }})
+  #       run: |
+  #         pytest tests/system_tests
+  #       env:
+  #         REDIS_CLUSTER_STARTUP_NODES: 'redis://localhost:7000'
+
+  aioredis_tests:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         redis-version:
-          - '5.0.9'
-          - '6.0.12'
-          - '6.2.1'
-        with_aioredis:
-          - 'yes'
-          - 'no'
-
-    services:
-      redis:
-        image: grokzen/redis-cluster:${{ matrix.redis-version }}
-        ports:
-          - 7000-7007:7000-7007
-
+          # - '2.8.22'
+          - '3.2.13'
+          # - '4.0.14'
+          # - '5.0.9'
+          # - '6.0.12'
+          # - '6.2.1'
+          # - '7.0.2'
     steps:
       - uses: actions/checkout@v3
       - name: 'Set up Python'
         uses: actions/setup-python@v4
         with:
           python-version: 3.8
-      - name: 'Install dependencies (aioredis: ${{ matrix.with_aioredis }})'
+      - name: Build redis-server v${{ matrix.redis-version }}
+        uses: shogo82148/actions-setup-redis@v1.17.0
+        with:
+          redis-version: '${{ matrix.redis-version }}'
+          auto-start: 'false'
+      - name: redis test
         run: |
-          python -m pip install -U pip setuptools
-          if [ "${{ matrix.with_aioredis }}" == "yes" ]; then
-            python -m pip install -Ue '.[devel,aioredis]';
-          else
-            python -m pip install -Ue '.[devel]'
-          fi
-      - name: Test with pytest and redis(v${{ matrix.redis-version }})
-        run: |
-          pytest tests/system_tests
-        env:
-          REDIS_CLUSTER_STARTUP_NODES: 'redis://localhost:7000'
+          command redis-server
+          redis-server -v
+      # - name: 'Install dependencies (aioredis: ${{ matrix.with_aioredis }})'
+      #   run: |
+      #     python -m pip install -U pip setuptools
+      #     if [ "${{ matrix.with_aioredis }}" == "yes" ]; then
+      #       python -m pip install -Ue '.[devel,aioredis]';
+      #     else
+      #       python -m pip install -Ue '.[devel]'
+      #     fi
+
 
   pre-deploy:
     runs-on: ubuntu-latest
