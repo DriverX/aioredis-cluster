@@ -64,7 +64,7 @@ async def test_create_connection_timeout(mocker, create_pool, server):
             side_effect=open_conn_fe,
         ),
     )
-    with pytest.raises(TimeoutError):
+    with pytest.raises(asyncio.TimeoutError):
         await create_pool(server.tcp_address, create_connection_timeout=0.1)
     open_conn_mock.assert_awaited_once()
 
