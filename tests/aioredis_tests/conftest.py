@@ -354,11 +354,18 @@ def start_server(_proc, request, unused_port, server_bin):
         f = open(stdout_file, "w")
         atexit.register(f.close)
         proc = _proc(
-            server_bin, *args, stdout=f, stderr=subprocess.STDOUT, _clear_tmp_files=tmp_files
+            server_bin,
+            *args,
+            stdout=f,
+            stderr=subprocess.STDOUT,
+            _clear_tmp_files=tmp_files,
         )
         with open(stdout_file, "rt") as f:
             for _ in timeout(10):
-                assert proc.poll() is None, ("Process terminated", proc.returncode)
+                if proc.poll() is not None and proc.returncode != 0:
+                    f.seek(0)
+                    print(f.read(), file=sys.stderr)
+                    raise RuntimeError("Process terminated")
                 log = f.readline()
                 if log and verbose:
                     print(name, ":", log, end="")
