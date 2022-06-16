@@ -315,6 +315,8 @@ def start_server(_proc, request, unused_port, server_bin):
                 if password:
                     write('requirepass "{}"'.format(password))
                 write("# extra config")
+                if version >= (7, 0):
+                    write("enable-debug-command yes")
                 for line in config_lines:
                     write(line)
                 if slaveof is not None:
@@ -328,6 +330,19 @@ def start_server(_proc, request, unused_port, server_bin):
             tmp_files.append(config)
         else:
             args = [server_bin]
+            args += [
+                "--daemonize",
+                "no",
+                "--save",
+                '""',
+                "--dir",
+                data_dir,
+                "--dbfilename",
+                dumpfile,
+                "--port",
+                str(port),
+            ]
+
             if password:
                 args += [
                     "--requirepass",
@@ -347,18 +362,9 @@ def start_server(_proc, request, unused_port, server_bin):
                         "--masterauth",
                         f"{password}",
                     ]
-            args += [
-                "--daemonize",
-                "no",
-                "--save",
-                '""',
-                "--dir",
-                data_dir,
-                "--dbfilename",
-                dumpfile,
-                "--port",
-                str(port),
-            ]
+
+            if version >= (7, 0):
+                args += ["--enable-debug-command", "yes"]
 
             if unixsocket:
                 args += [
@@ -443,6 +449,8 @@ def start_sentinel(_proc, request, unused_port, server_bin):
             if unixsocket:
                 write("unixsocket", unixsocket)
             write("loglevel debug")
+            if version >= (7, 0):
+                write("enable-debug-command yes")
             for master in masters:
                 write("sentinel monitor", master.name, "127.0.0.1", master.tcp_address.port, quorum)
                 write("sentinel down-after-milliseconds", master.name, down_after_milliseconds)

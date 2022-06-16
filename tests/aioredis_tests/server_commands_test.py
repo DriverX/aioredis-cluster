@@ -30,9 +30,12 @@ async def test_client_list(redis, server, request):
         "oll": "0",
         "omem": "0",
         "events": "r",
-        "cmd": "client",
         "name": name,
     }
+    if server.version >= (7, 0):
+        expected["cmd"] = "client|list"
+    else:
+        expected["cmd"] = "client"
     if server.version >= (2, 8, 12):
         expected["id"] = mock.ANY
     if server.version >= (5,):
@@ -53,6 +56,7 @@ async def test_client_list(redis, server, request):
     else:
         assert False, f"not client with {name!r} in response"
 
+    client_data = {k: client_data[k] for k in expected.keys()}
     assert client_data == expected
 
 
@@ -79,9 +83,12 @@ async def test_client_list__unixsocket(create_redis, server, request):
         "oll": "0",
         "omem": "0",
         "events": "r",
-        "cmd": "client",
         "name": name,
     }
+    if server.version >= (7, 0):
+        expected["cmd"] = "client|list"
+    else:
+        expected["cmd"] = "client"
     if server.version >= (2, 8, 12):
         expected["id"] = mock.ANY
     if server.version >= (5,):
@@ -101,6 +108,8 @@ async def test_client_list__unixsocket(create_redis, server, request):
             break
     else:
         assert False, f"not client with {name!r} in response"
+
+    client_data = {k: client_data[k] for k in expected.keys()}
     assert expected == client_data
 
 
@@ -172,7 +181,7 @@ async def test_command_info(redis, server):
         2,
     ):
         expected.append(["@read", "@string", "@fast"])
-    assert res[0] == expected
+    assert res[0][: len(expected)] == expected
 
     res = await redis.command_info("unknown-command")
     assert res == [None]
@@ -206,7 +215,7 @@ async def test_config_set(redis):
     res = await redis.config_set("slave-read-only", cur_value["slave-read-only"])
     assert res is True
 
-    with pytest.raises(ReplyError, match="Unsupported CONFIG parameter"):
+    with pytest.raises(ReplyError, match=".+ CONFIG"):
         await redis.config_set("databases", 100)
     with pytest.raises(TypeError):
         await redis.config_set(100, "databases")

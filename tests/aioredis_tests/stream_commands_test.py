@@ -256,18 +256,28 @@ async def test_xgroup_create(redis, server_bin):
     # Also tests xinfo_groups()
     await redis.xadd("test_stream", {"a": 1})
     await redis.xgroup_create("test_stream", "test_group")
-    info = await redis.xinfo_groups("test_stream")
-    assert info == [
-        {b"name": b"test_group", b"last-delivered-id": mock.ANY, b"pending": 0, b"consumers": 0}
-    ]
+    info_list = await redis.xinfo_groups("test_stream")
+    expected = {
+        b"name": b"test_group",
+        b"last-delivered-id": mock.ANY,
+        b"pending": 0,
+        b"consumers": 0,
+    }
+    info = {k: info_list[0][k] for k in expected.keys()}
+    assert info == expected
 
 
 async def test_xgroup_create_mkstream(redis, server_bin):
     await redis.xgroup_create("test_stream", "test_group", mkstream=True)
-    info = await redis.xinfo_groups("test_stream")
-    assert info == [
-        {b"name": b"test_group", b"last-delivered-id": mock.ANY, b"pending": 0, b"consumers": 0}
-    ]
+    info_list = await redis.xinfo_groups("test_stream")
+    expected = {
+        b"name": b"test_group",
+        b"last-delivered-id": mock.ANY,
+        b"pending": 0,
+        b"consumers": 0,
+    }
+    info = {k: info_list[0][k] for k in expected.keys()}
+    assert info == expected
 
 
 async def test_xgroup_create_already_exists(redis, server_bin):

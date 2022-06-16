@@ -4,6 +4,7 @@ import logging
 import sys
 from unittest import mock
 
+import async_timeout
 import pytest
 
 from aioredis_cluster._aioredis import ChannelClosedError
@@ -203,10 +204,9 @@ async def test_wait_message(create_connection, server):
     assert not fut.done()
 
     await pub.execute("publish", "channel:1", "hello")
-    await asyncio.sleep(0)  # read in connection
-    await asyncio.sleep(0)  # call Future.set_result
-    assert fut.done()
-    res = await fut
+
+    async with async_timeout.timeout(0.1):
+        res = await fut
     assert res is True
 
 
