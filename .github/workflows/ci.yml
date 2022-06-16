@@ -118,7 +118,7 @@ jobs:
           python -m pip install -Ue '.[devel]'
       - name: Run tests aioredis_cluster._aioredis
         run: |
-          pytest tests/aioredis_tests
+          pytest -x -vv tests/aioredis_tests
 
 
   # pre-deploy:
