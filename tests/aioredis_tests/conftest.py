@@ -318,7 +318,10 @@ def start_server(_proc, request, unused_port, server_bin):
                 for line in config_lines:
                     write(line)
                 if slaveof is not None:
-                    write("slaveof {0.tcp_address.host} {0.tcp_address.port}".format(slaveof))
+                    if version >= (7, 0):
+                        write("replicaof {0.tcp_address.host} {0.tcp_address.port}".format(slaveof))
+                    else:
+                        write("slaveof {0.tcp_address.host} {0.tcp_address.port}".format(slaveof))
                     if password:
                         write('masterauth "{}"'.format(password))
             args = [config]
@@ -344,8 +347,11 @@ def start_server(_proc, request, unused_port, server_bin):
             if password:
                 args += ['--requirepass "{}"'.format(password)]
             if slaveof is not None:
+                if version >= (7, 0):
+                    args += ["--replicaof"]
+                else:
+                    args += ["--slaveof"]
                 args += [
-                    "--slaveof",
                     str(slaveof.tcp_address.host),
                     str(slaveof.tcp_address.port),
                 ]
