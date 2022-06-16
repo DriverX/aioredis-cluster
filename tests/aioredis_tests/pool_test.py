@@ -10,7 +10,6 @@ from _testutils import redis_version
 from aioredis_cluster._aioredis import (
     ConnectionClosedError,
     ConnectionsPool,
-    ConnectTimeoutError,
     MaxClientsError,
     PoolClosedError,
     ReplyError,
@@ -57,7 +56,7 @@ async def test_maxsize(maxsize, create_pool, server):
 async def test_create_connection_timeout(create_pool, server):
     with patch("aioredis_cluster._aioredis.connection.open_connection") as open_conn_mock:
         open_conn_mock.side_effect = lambda *a, **kw: asyncio.sleep(0.2)
-        with pytest.raises(ConnectTimeoutError):
+        with pytest.raises(TimeoutError):
             await create_pool(server.tcp_address, create_connection_timeout=0.1)
 
 
