@@ -1,7 +1,6 @@
 import argparse
 import asyncio
 import logging
-import random
 from collections import deque
 from typing import Counter, Deque, Dict, Mapping, Optional, Set
 
