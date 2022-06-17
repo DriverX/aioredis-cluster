@@ -102,6 +102,7 @@ jobs:
               - '.github/workflows/**'
               - 'src/aioredis_cluster/_aioredis/**'
               - 'tests/aioredis_tests/**'
+          base: ${{ github.base_ref }}
 
   aioredis_tests:
     needs:
@@ -119,12 +120,6 @@ jobs:
           - '7.0.2'
     steps:
       - uses: actions/checkout@v3
-      - uses: dorny/paths-filter@v2
-        id: filter
-        with:
-          filters: |
-            workflows:
-              - '.github/workflows/**'
       - name: 'Set up Python'
         uses: actions/setup-python@v4
         with:
@@ -172,7 +167,7 @@ jobs:
           echo $VERSION
           make dist VERSION="$VERSION"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: dist
           path: dist
@@ -184,12 +179,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download dists
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: dist
           path: dist
       - name: Publish package
-        uses: pypa/gh-action-pypi-publish@master
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
           user: __token__
           password: ${{ secrets.PYPI_TOKEN }}
