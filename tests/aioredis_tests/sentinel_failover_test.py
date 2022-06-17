@@ -22,15 +22,15 @@ async def test_auto_failover(start_sentinel, start_server, create_sentinel, crea
         "sentinel-failover1",
         server1,
         quorum=2,
-        down_after_milliseconds=200,
-        failover_timeout=500,
+        down_after_milliseconds=300,
+        failover_timeout=1000,
     )
     sentinel2 = start_sentinel(
         "sentinel-failover2",
         server1,
         quorum=2,
-        down_after_milliseconds=200,
-        failover_timeout=500,
+        down_after_milliseconds=300,
+        failover_timeout=1000,
     )
     # Wait a bit for sentinels to sync
     await asyncio.sleep(3)
@@ -48,7 +48,7 @@ async def test_auto_failover(start_sentinel, start_server, create_sentinel, crea
 
     # wait failover
     conn = await create_connection(server1.tcp_address)
-    await conn.execute("debug", "sleep", 2)
+    await conn.execute("debug", "sleep", 3)
 
     # _, new_port = await sp.master_address(server1.name)
     # assert new_port != old_port
