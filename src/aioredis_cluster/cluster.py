@@ -758,49 +758,53 @@ class Cluster(AbcCluster):
     ) -> Any:
         result: Any
 
-        conn_acquired = False
+        tail_timeout = timeout
         acquire_start_t = time.monotonic()
 
         try:
-            async with atimeout(timeout):
-                async with pool.get() as conn:
-                    conn_acquired = True
-                    if timeout is not None:
-                        timeout -= time.monotonic() - acquire_start_t
-                    async with atimeout(timeout):
-                        if asking:
-                            # emulate command pipeline
-                            results = await asyncio.gather(
-                                conn.execute(b"ASKING"),
-                                conn.execute(*args, **kwargs),
-                                return_exceptions=True,
-                            )
-                            # raise first error
-                            for result in results:
-                                if isinstance(result, BaseException):
-                                    raise result
-
-                            result = results[1]
-                        else:
-                            result = await conn.execute(*args, **kwargs)
-
-                        return result
+            async with atimeout(tail_timeout):
+                conn = await pool.acquire()
         except asyncio.TimeoutError:
-            if conn_acquired:
-                logger.warning(
-                    "Execute command %s on %s is timed out. Closing connection",
-                    args[0],
-                    pool.address,
-                )
-                conn.close()
-                await conn.wait_closed()
-            else:
-                logger.warning(
-                    "Acquire connection from pool %s is timed out while processing command %s",
-                    pool.address,
-                    args[0],
-                )
+            logger.warning(
+                "Acquire connection from pool %s is timed out while processing command %s",
+                pool.address,
+                args[0],
+            )
             raise
+
+        if tail_timeout is not None:
+            tail_timeout -= time.monotonic() - acquire_start_t
+
+        try:
+            async with atimeout(tail_timeout):
+                if asking:
+                    # emulate command pipeline
+                    results = await asyncio.gather(
+                        conn.execute(b"ASKING"),
+                        conn.execute(*args, **kwargs),
+                        return_exceptions=True,
+                    )
+                    # raise first error
+                    for result in results:
+                        if isinstance(result, BaseException):
+                            raise result
+
+                    result = results[1]
+                else:
+                    result = await conn.execute(*args, **kwargs)
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Execute command %s on %s is timed out. Closing connection",
+                args[0],
+                pool.address,
+            )
+            conn.close()
+            await conn.wait_closed()
+            raise
+        finally:
+            pool.release(conn)
+
+        return result
 
     async def _pool_execute(
         self,

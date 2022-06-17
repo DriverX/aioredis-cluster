@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import logging
+import random
 from collections import deque
 from typing import Counter, Deque, Dict, Mapping, Optional, Set
 
@@ -21,7 +22,7 @@ async def tick_log(routines_counters: Mapping[int, Counter]) -> None:
         routines = sorted(
             routines_counters.items(),
             key=lambda item: item[1]["redis_count"],
-            reverse=False,
+            reverse=True,
         )
         for routine_id, counters in routines:
             logger.info("tick %d: %s: %r", count, routine_id, counters)
@@ -70,6 +71,7 @@ async def routine_work(redis: Redis, routine_id: int, counters: Counter[str]) ->
     except Exception as e:
         logger.exception("%d: Redis error: %r", routine_id, e)
         # await asyncio.sleep(0.001)
+    await asyncio.sleep(random.random())
 
 
 def create_routines(
@@ -96,6 +98,11 @@ async def start_commands_gun(
     for routine_id in range(1, routines_num + 1):
         routines_id_pool.put_nowait(routine_id)
         routines_counters[routine_id] = Counter()
+        await routine_work(
+            redis,
+            routine_id,
+            routines_counters[routine_id],
+        )
 
     routine_tasks: Set[asyncio.Task] = set()
 
@@ -118,7 +125,7 @@ async def start_commands_gun(
             )
             routine_tasks.add(routine_task)
             routine_task.add_done_callback(back_to_pool(routine_id))
-            await asyncio.sleep(0.001)
+            await asyncio.sleep(1.001)
     except asyncio.CancelledError:
         num_of_tasks = len(routine_tasks)
         for routine_task in routine_tasks:
@@ -161,22 +168,22 @@ async def async_main() -> None:
     )
     routine_tasks: Deque[asyncio.Task] = deque()
     try:
-        # routine_tasks.extend(
-        #     create_routines(
-        #         args.routines,
-        #         redis,
-        #         routines_counters=routines_counters,
-        #     )
-        # )
-        routine_tasks.append(
-            loop.create_task(
-                start_commands_gun(
-                    redis=redis,
-                    routines_num=args.routines,
-                    routines_counters=routines_counters,
-                )
+        routine_tasks.extend(
+            create_routines(
+                args.routines,
+                redis,
+                routines_counters=routines_counters,
             )
         )
+        # routine_tasks.append(
+        #     loop.create_task(
+        #         start_commands_gun(
+        #             redis=redis,
+        #             routines_num=args.routines,
+        #             routines_counters=routines_counters,
+        #         )
+        #     )
+        # )
         # last_routine_id = len(routine_tasks)
         logger.info("Routines %d", len(routine_tasks))
 

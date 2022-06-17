@@ -401,15 +401,13 @@ class ConnectionsPool(AbcPool):
         except asyncio.TimeoutError:
             raise ConnectTimeoutError(address)
 
-    async def _wakeup(self, closing_conn=None):
+    async def _wakeup(self):
         async with self._cond:
             if self._released:
                 self._pool.extend(conn for conn in self._released if not conn.closed)
                 self._used.difference_update(self._released)
                 self._released.clear()
             self._cond.notify()
-        if closing_conn is not None:
-            await closing_conn.wait_closed()
 
     def __enter__(self):
         raise RuntimeError("'await' should be used as a context manager expression")

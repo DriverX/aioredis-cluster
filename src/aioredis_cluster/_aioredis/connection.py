@@ -39,7 +39,7 @@ __all__ = ["create_connection", "RedisConnection"]
 
 MAX_CHUNK_SIZE = 65536
 
-_PUBSUB_COMMANDS = (
+_PUBSUB_COMMANDS = {
     "SUBSCRIBE",
     b"SUBSCRIBE",
     "PSUBSCRIBE",
@@ -48,7 +48,8 @@ _PUBSUB_COMMANDS = (
     b"UNSUBSCRIBE",
     "PUNSUBSCRIBE",
     b"PUNSUBSCRIBE",
-)
+}
+_PING_COMMANDS = {"PING", b"PING"}
 
 
 async def create_connection(
@@ -332,7 +333,7 @@ class RedisConnection(AbcConnection):
             raise TypeError("args must not contain None")
         command = command.upper().strip()
         is_pubsub = command in _PUBSUB_COMMANDS
-        is_ping = command in ("PING", b"PING")
+        is_ping = command in _PING_COMMANDS
         if self._in_pubsub and not (is_pubsub or is_ping):
             raise RedisError("Connection in SUBSCRIBE mode")
         elif is_pubsub:
