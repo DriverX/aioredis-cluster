@@ -4,10 +4,10 @@ Changes
 2.0.0 (2022-xx-xx)
 ------------------
 
-* include `aioredis==1.3.1` source code into `aioredis_cluster._aioredis` but for compatible introduce `aioredis_cluster.aioredis`
-* fix reacquire connection in `aioredic.ConnectionsPool` after Redis node failure
+* include `aioredis==1.3.1` source code into `aioredis_cluster._aioredis` and introduce `aioredis_cluster.aioredis` but for compatible and migration period
 * this release have not backward incompatible changes
 * __DEPRECATION WARNING:__ you must migrate from `import aioredis` to `import aioredis_cluster.aioredis` because `aioredis_cluster` starts vendorize `aioredis` package and maintain it separately. Using `aioredis` package __will be removed in v3__
+* fix reacquire connection in `aioredic.ConnectionsPool` after Redis node failure
 
 1.8.0 (2022-05-20)
 ------------------
