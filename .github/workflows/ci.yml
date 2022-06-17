@@ -93,7 +93,7 @@ jobs:
   aioredis_tests_need_run:
     runs-on: ubuntu-latest
     outputs:
-      need_run: ${{ steps.changes.outputs.src }} || ${{ steps.force_run.outputs.force_run }}
+      need_run: ${{ steps.changes.outputs.src || steps.force_run.outputs.force_run }}
     steps:
       - uses: dorny/paths-filter@v2
         id: changes
