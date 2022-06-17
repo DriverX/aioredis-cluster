@@ -102,7 +102,7 @@ jobs:
               - '.github/workflows/**'
               - 'src/aioredis_cluster/_aioredis/**'
               - 'tests/aioredis_tests/**'
-          base: ${{ github.base_ref }}
+              - setup.cfg
 
   aioredis_tests:
     needs:
