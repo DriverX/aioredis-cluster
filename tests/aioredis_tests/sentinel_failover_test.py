@@ -48,7 +48,7 @@ async def test_auto_failover(start_sentinel, start_server, create_sentinel, crea
 
     # wait failover
     conn = await create_connection(server1.tcp_address)
-    await conn.execute("debug", "sleep", 3)
+    await conn.execute("debug", "sleep", 5)
 
     # _, new_port = await sp.master_address(server1.name)
     # assert new_port != old_port
