@@ -18,6 +18,7 @@ clean:
 
 .PHONY: devel
 devel:
+	pip install -U pip setuptools
 	pip install -Ue '.[devel,aioredis]'
 
 .PHONY: flake
