@@ -91,15 +91,16 @@ async def test_master__auth(mocker, create_sentinel, start_sentinel, start_serve
         m2 = client2.master_for(master.name)
         await m2.set("mykey", "myval")
 
-    if isinstance(exc_info.value.args[1], AuthError):
-        expected = ("Service master_1 error", AuthError("ERR invalid password"))
+    if sentinel.version >= (6, 2):
+        expected_error = ReplyError("WRONGPASS invalid username-password pair or user is disabled.")
+    elif sentinel.version >= (6, 0) and sentinel.version < (6, 2):
+        expected_error = ReplyError("WRONGPASS invalid username-password pair")
     else:
-        expected = (
-            "Service master_1 error",
-            ReplyError("WRONGPASS invalid username-password pair or user is disabled."),
-        )
-    assert exc_info.value.args[0] == expected[0]
-    assert str(exc_info.value.args[1]) == str(expected[1])
+        expected_error = AuthError("ERR invalid password")
+
+    assert exc_info.value.args[0] == "Service master_1 error"
+    assert str(exc_info.value.args[1]) == str(expected_error)
+    assert isinstance(exc_info.value.args[1], type(expected_error))
 
     with pytest.raises(MasterReplyError):
         m3 = client3.master_for(master.name)
