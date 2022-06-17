@@ -619,15 +619,15 @@ class Cluster(AbcCluster):
 
         pool = await self._pooler.ensure_pool(node_addr)
 
-        pool_size = pool.size
-        if pool_size >= pool.maxsize and pool.freesize == 0:
-            logger.warning(
-                "ConnectionPool to %s size limit reached (minsize:%s, maxsize:%s, current:%s])",
-                node_addr,
-                pool.minsize,
-                pool.maxsize,
-                pool_size,
-            )
+        # pool_size = pool.size
+        # if pool_size >= pool.maxsize and pool.freesize == 0:
+        #     logger.warning(
+        #         "ConnectionPool to %s size limit reached (minsize:%s, maxsize:%s, current:%s])",
+        #         node_addr,
+        #         pool.minsize,
+        #         pool.maxsize,
+        #         pool_size,
+        #     )
 
         if props.asking:
             logger.info("Send ASKING to %s for command %r", node_addr, ctx.cmd_name)
