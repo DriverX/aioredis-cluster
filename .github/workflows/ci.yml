@@ -93,10 +93,12 @@ jobs:
   aioredis_tests_need_run:
     runs-on: ubuntu-latest
     outputs:
-      need_run: ${{ steps.changes.outputs.src }}
+      need_run: ${{ steps.changes.outputs.src }} || ${{ steps.force_run.outputs.force_run }}
     steps:
       - uses: dorny/paths-filter@v2
         id: changes
+        if: |
+          !startsWith(github.ref, 'refs/tags/v')
         with:
           filters: |
             src:
@@ -104,6 +106,12 @@ jobs:
               - 'src/aioredis_cluster/_aioredis/**'
               - 'tests/aioredis_tests/**'
               - setup.cfg
+      - id: force_run
+        if: |
+          startsWith(github.ref, 'refs/tags/v')
+        run: |
+          echo ::set-output name=force_run::true
+
 
   aioredis_tests:
     needs:
