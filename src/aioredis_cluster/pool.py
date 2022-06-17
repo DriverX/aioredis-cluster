@@ -349,17 +349,21 @@ class ConnectionsPool(AbcPool):
         # FIXME: check event loop is not closed
         asyncio.ensure_future(self._wakeup())
 
-    def _drop_closed(self):
+    async def _drop_closed(self) -> None:
+        close_waiters: Set[asyncio.Future] = set()
         for i in range(self.freesize):
             conn = self._pool[0]
             if conn.closed:
                 self._pool.popleft()
+                close_waiters.add(asyncio.ensure_future(conn.wait_closed()))
             else:
                 self._pool.rotate(-1)
+        if close_waiters:
+            await asyncio.wait(close_waiters)
 
     async def _fill_free(self, *, override_min):
         # drop closed connections first
-        self._drop_closed()
+        await self._drop_closed()
         # address = self._address
         while self.size < self.minsize:
             self._acquiring += 1
@@ -372,7 +376,7 @@ class ConnectionsPool(AbcPool):
             finally:
                 self._acquiring -= 1
                 # connection may be closed at yield point
-                self._drop_closed()
+                await self._drop_closed()
         if self.freesize:
             return
         if override_min:
@@ -384,7 +388,7 @@ class ConnectionsPool(AbcPool):
                 finally:
                     self._acquiring -= 1
                     # connection may be closed at yield point
-                    self._drop_closed()
+                    await self._drop_closed()
 
     async def _create_new_connection(self, address) -> RedisConnection:
         try:
