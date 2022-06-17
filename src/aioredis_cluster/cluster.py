@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from collections import ChainMap
 from time import monotonic
 from types import MappingProxyType
@@ -757,35 +758,49 @@ class Cluster(AbcCluster):
     ) -> Any:
         result: Any
 
-        async with pool.get() as conn:
-            try:
-                async with atimeout(timeout):
-                    if asking:
-                        # emulate command pipeline
-                        results = await asyncio.gather(
-                            conn.execute(b"ASKING"),
-                            conn.execute(*args, **kwargs),
-                            return_exceptions=True,
-                        )
-                        # raise first error
-                        for result in results:
-                            if isinstance(result, BaseException):
-                                raise result
+        conn_acquired = False
+        acquire_start_t = time.monotonic()
 
-                        result = results[1]
-                    else:
-                        result = await conn.execute(*args, **kwargs)
+        try:
+            async with atimeout(timeout):
+                async with pool.get() as conn:
+                    conn_acquired = True
+                    if timeout is not None:
+                        timeout -= time.monotonic() - acquire_start_t
+                    async with atimeout(timeout):
+                        if asking:
+                            # emulate command pipeline
+                            results = await asyncio.gather(
+                                conn.execute(b"ASKING"),
+                                conn.execute(*args, **kwargs),
+                                return_exceptions=True,
+                            )
+                            # raise first error
+                            for result in results:
+                                if isinstance(result, BaseException):
+                                    raise result
 
-                    return result
+                            result = results[1]
+                        else:
+                            result = await conn.execute(*args, **kwargs)
 
-            except asyncio.TimeoutError:
+                        return result
+        except asyncio.TimeoutError:
+            if conn_acquired:
                 logger.warning(
                     "Execute command %s on %s is timed out. Closing connection",
                     args[0],
                     pool.address,
                 )
                 conn.close()
-                raise
+                await conn.wait_closed()
+            else:
+                logger.warning(
+                    "Acquire connection from pool %s is timed out while processing command %s",
+                    pool.address,
+                    args[0],
+                )
+            raise
 
     async def _pool_execute(
         self,
