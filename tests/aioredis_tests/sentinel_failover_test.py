@@ -19,10 +19,18 @@ async def test_auto_failover(start_sentinel, start_server, create_sentinel, crea
     start_server("slave-failover2", ["slave-read-only yes"], slaveof=server1)
 
     sentinel1 = start_sentinel(
-        "sentinel-failover1", server1, quorum=2, down_after_milliseconds=300, failover_timeout=1000
+        "sentinel-failover1",
+        server1,
+        quorum=2,
+        down_after_milliseconds=200,
+        failover_timeout=500,
     )
     sentinel2 = start_sentinel(
-        "sentinel-failover2", server1, quorum=2, down_after_milliseconds=300, failover_timeout=1000
+        "sentinel-failover2",
+        server1,
+        quorum=2,
+        down_after_milliseconds=200,
+        failover_timeout=500,
     )
     # Wait a bit for sentinels to sync
     await asyncio.sleep(3)
