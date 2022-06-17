@@ -140,7 +140,7 @@ jobs:
           python -m pip install -Ue '.[devel]'
       - name: Run tests aioredis_cluster._aioredis
         run: |
-          pytest -k test_auto_failover tests/aioredis_tests
+          pytest tests/aioredis_tests
 
   pre-deploy:
     runs-on: ubuntu-latest
