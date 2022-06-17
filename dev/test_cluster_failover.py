@@ -1,10 +1,15 @@
 import argparse
 import asyncio
+import gc
 import logging
 from collections import deque
 from typing import Counter, Deque, Dict, Mapping, Optional, Set
 
-from aioredis import Redis
+
+try:
+    from aioredis import Redis
+except ImportError:
+    from aioredis_cluster.aioredis import Redis
 
 from aioredis_cluster import create_redis_cluster
 
@@ -25,6 +30,7 @@ async def tick_log(routines_counters: Mapping[int, Counter]) -> None:
         )
         for routine_id, counters in routines:
             logger.info("tick %d: %s: %r", count, routine_id, counters)
+        logger.info("GC collected %d objects", gc.collect())
 
 
 async def routine(
