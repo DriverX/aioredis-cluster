@@ -71,7 +71,7 @@ async def routine_work(redis: Redis, routine_id: int, counters: Counter[str]) ->
     except Exception as e:
         logger.exception("%d: Redis error: %r", routine_id, e)
         # await asyncio.sleep(0.001)
-    await asyncio.sleep(random.random())
+    # await asyncio.sleep(random.random())
 
 
 def create_routines(
@@ -163,7 +163,7 @@ async def async_main() -> None:
     redis = await create_redis_cluster(
         [node_addr],
         pool_minsize=1,
-        pool_maxsize=2,
+        pool_maxsize=1,
         connect_timeout=1.0,
     )
     routine_tasks: Deque[asyncio.Task] = deque()
