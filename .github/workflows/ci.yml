@@ -98,7 +98,7 @@ jobs:
       - uses: dorny/paths-filter@v2
         id: changes
         if: |
-          !startsWith(github.ref, 'refs/tags/v') and github.ref != 'refs/heads/master'
+          !startsWith(github.ref, 'refs/tags/v') && github.ref != 'refs/heads/master'
         with:
           filters: |
             src:
