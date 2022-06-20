@@ -98,9 +98,8 @@ jobs:
       - uses: dorny/paths-filter@v2
         id: changes
         if: |
-          !startsWith(github.ref, 'refs/tags/v')
+          !startsWith(github.ref, 'refs/tags/v') and github.ref != 'refs/heads/master'
         with:
-          base: master
           filters: |
             src:
               - '.github/workflows/**'
@@ -109,7 +108,7 @@ jobs:
               - setup.cfg
       - id: force_run
         if: |
-          startsWith(github.ref, 'refs/tags/v')
+          startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
         run: |
           echo ::set-output name=force_run::true
 
