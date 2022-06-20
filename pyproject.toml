@@ -8,8 +8,9 @@ known_third_party = ["aioredis"]
 lines_after_imports = 2
 multi_line_output = 3
 include_trailing_comma = true
+use_parentheses = true
 
 [tool.black]
 line-length = 100
-target-version = ["py36", "py37", "py38"]
+target-version = ["py36"]
 exclude = '.pyi$'

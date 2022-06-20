@@ -1,7 +1,6 @@
 from typing import Awaitable, Callable
 
-from aioredis.util import _NOTSET, wait_convert, wait_ok
-
+from aioredis_cluster.aioredis.util import _NOTSET, wait_convert, wait_ok
 from aioredis_cluster.util import (
     parse_cluster_nodes,
     parse_cluster_slaves,

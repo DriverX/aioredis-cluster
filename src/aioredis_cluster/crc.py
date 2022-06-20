@@ -1,10 +1,10 @@
 from binascii import crc_hqx
 
 
-__all__ = [
+__all__ = (
     "crc16",
     "key_slot",
-]
+)
 
 REDIS_CLUSTER_HASH_SLOTS = 16384
 

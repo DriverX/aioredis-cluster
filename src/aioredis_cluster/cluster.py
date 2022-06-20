@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from collections import ChainMap
 from time import monotonic
 from types import MappingProxyType
@@ -15,11 +16,11 @@ from typing import (
     Type,
 )
 
-from aioredis import Redis, create_pool
-from aioredis.errors import ProtocolError, ReplyError
 from async_timeout import timeout as atimeout
 
 from aioredis_cluster.abc import AbcChannel, AbcCluster, AbcPool
+from aioredis_cluster.aioredis import Redis, create_pool
+from aioredis_cluster.aioredis.errors import ProtocolError, ReplyError
 from aioredis_cluster.command_exec import (
     ExecuteContext,
     ExecuteFailProps,
@@ -27,7 +28,6 @@ from aioredis_cluster.command_exec import (
 )
 from aioredis_cluster.command_info import CommandInfo, extract_keys
 from aioredis_cluster.commands import RedisCluster
-from aioredis_cluster.connection import ConnectionsPool
 from aioredis_cluster.crc import key_slot
 from aioredis_cluster.errors import (
     AskError,
@@ -44,6 +44,7 @@ from aioredis_cluster.errors import (
 )
 from aioredis_cluster.log import logger
 from aioredis_cluster.manager import ClusterManager, ClusterState
+from aioredis_cluster.pool import ConnectionsPool
 from aioredis_cluster.pooler import Pooler
 from aioredis_cluster.structs import Address, ClusterNode
 from aioredis_cluster.typedef import (
@@ -619,15 +620,15 @@ class Cluster(AbcCluster):
 
         pool = await self._pooler.ensure_pool(node_addr)
 
-        pool_size = pool.size
-        if pool_size >= pool.maxsize and pool.freesize == 0:
-            logger.warning(
-                "ConnectionPool to %s size limit reached (minsize:%s, maxsize:%s, current:%s])",
-                node_addr,
-                pool.minsize,
-                pool.maxsize,
-                pool_size,
-            )
+        # pool_size = pool.size
+        # if pool_size >= pool.maxsize and pool.freesize == 0:
+        #     logger.warning(
+        #         "ConnectionPool to %s size limit reached (minsize:%s, maxsize:%s, current:%s])",
+        #         node_addr,
+        #         pool.minsize,
+        #         pool.maxsize,
+        #         pool_size,
+        #     )
 
         if props.asking:
             logger.info("Send ASKING to %s for command %r", node_addr, ctx.cmd_name)
@@ -757,35 +758,53 @@ class Cluster(AbcCluster):
     ) -> Any:
         result: Any
 
-        async with pool.get() as conn:
-            try:
-                async with atimeout(timeout):
-                    if asking:
-                        # emulate command pipeline
-                        results = await asyncio.gather(
-                            conn.execute(b"ASKING"),
-                            conn.execute(*args, **kwargs),
-                            return_exceptions=True,
-                        )
-                        # raise first error
-                        for result in results:
-                            if isinstance(result, BaseException):
-                                raise result
+        tail_timeout = timeout
+        acquire_start_t = time.monotonic()
 
-                        result = results[1]
-                    else:
-                        result = await conn.execute(*args, **kwargs)
+        try:
+            async with atimeout(tail_timeout):
+                conn = await pool.acquire()
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Acquire connection from pool %s is timed out while processing command %s",
+                pool.address,
+                args[0],
+            )
+            raise
 
-                    return result
+        if tail_timeout is not None:
+            tail_timeout -= time.monotonic() - acquire_start_t
 
-            except asyncio.TimeoutError:
-                logger.warning(
-                    "Execute command %s on %s is timed out. Closing connection",
-                    args[0],
-                    pool.address,
-                )
-                conn.close()
-                raise
+        try:
+            async with atimeout(tail_timeout):
+                if asking:
+                    # emulate command pipeline
+                    results = await asyncio.gather(
+                        conn.execute(b"ASKING"),
+                        conn.execute(*args, **kwargs),
+                        return_exceptions=True,
+                    )
+                    # raise first error
+                    for result in results:
+                        if isinstance(result, BaseException):
+                            raise result
+
+                    result = results[1]
+                else:
+                    result = await conn.execute(*args, **kwargs)
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Execute command %s on %s is timed out. Closing connection",
+                args[0],
+                pool.address,
+            )
+            conn.close()
+            await conn.wait_closed()
+            raise
+        finally:
+            pool.release(conn)
+
+        return result
 
     async def _pool_execute(
         self,

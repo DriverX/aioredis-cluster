@@ -23,10 +23,8 @@ def pooler_mock():
             return_value=object(),
         )
 
-        acquirer_mock = mock.NonCallableMock()
-        acquirer_mock.__aenter__ = mock.AsyncMock(return_value=conn)
-        acquirer_mock.__aexit__ = mock.AsyncMock(return_value=None)
-        pool.get.return_value = acquirer_mock
+        pool.acquire = mock.AsyncMock(return_value=conn)
+        pool.release = mock.Mock()
 
         mocked = mock.NonCallableMock()
         mocked.ensure_pool = mock.AsyncMock(return_value=pool)
@@ -279,7 +277,7 @@ async def test_fetch_state__with_error(pooler_mock):
         pool,
     ]
 
-    pool.get.return_value.__aenter__.side_effect = [
+    pool.acquire.side_effect = [
         RuntimeError("second error"),
         conn,
         conn,

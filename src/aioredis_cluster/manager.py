@@ -7,6 +7,7 @@ from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 import async_timeout
 
+from aioredis_cluster.abc import AbcConnection
 from aioredis_cluster.cluster_state import (
     ClusterState,
     NodeClusterState,
@@ -141,8 +142,8 @@ class ClusterManager:
 
         self._reload_count = 0
         self._reload_event = asyncio.Event()
-        loop = asyncio.get_event_loop()
-        self._reloader_task = loop.create_task(self._state_reloader())
+        self._loop = asyncio.get_event_loop()
+        self._reloader_task = self._loop.create_task(self._state_reloader())
 
     @property
     def commands(self) -> CommandsRegistry:
@@ -173,6 +174,7 @@ class ClusterManager:
             raise RuntimeError("no addrs to fetch cluster state")
 
         last_err: Optional[BaseException] = None
+        conn: AbcConnection
 
         if len(addrs) > 10:
             # choose first minimum ten addrs
@@ -184,21 +186,43 @@ class ClusterManager:
         # get first successful cluster slots response
         for addr in addrs:
             logger.info("Obtain cluster state from %s", addr)
+            tail_timeout = self._execute_timeout
+            execution_start_t = self._loop.time()
             try:
                 pool = await self._pooler.ensure_pool(addr)
-                async with async_timeout.timeout(self._execute_timeout):
-                    # ensure one connection behaviour
-                    async with pool.get() as conn:
+                try:
+                    async with async_timeout.timeout(tail_timeout):
+                        conn = await pool.acquire()
+                except asyncio.TimeoutError as e:
+                    last_err = e
+                    logger.warning("Acquire connection from pool %s is timed out", addr)
+                    continue
+
+                tail_timeout -= self._loop.time() - execution_start_t
+
+                try:
+                    async with async_timeout.timeout(tail_timeout):
+                        # ensure one connection behaviour
                         raw_cluster_info: str = await conn.execute(
-                            b"CLUSTER", b"INFO", encoding="utf-8"
+                            b"CLUSTER",
+                            b"INFO",
+                            encoding="utf-8",
                         )
                         cluster_info = parse_info(raw_cluster_info)
-                        slots_resp = await conn.execute(b"CLUSTER", b"SLOTS", encoding="utf-8")
+                        slots_resp = await conn.execute(
+                            b"CLUSTER",
+                            b"SLOTS",
+                            encoding="utf-8",
+                        )
+                except asyncio.TimeoutError as e:
+                    last_err = e
+                    logger.warning("Getting cluster state from %s is timed out", addr)
+                    conn.close()
+                    await conn.wait_closed()
+                    continue
+                finally:
+                    pool.release(conn)
 
-            except asyncio.TimeoutError as e:
-                last_err = e
-                logger.warning("Getting cluster state from %s is timed out", addr)
-                continue
             except Exception as e:
                 last_err = e
                 logger.warning("Unable to get cluster state from %s: %r", addr, e)

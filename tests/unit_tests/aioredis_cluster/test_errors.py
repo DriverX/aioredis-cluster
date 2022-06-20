@@ -1,6 +1,6 @@
 import pytest
-from aioredis import ReplyError
 
+from aioredis_cluster.aioredis import ReplyError
 from aioredis_cluster.errors import (
     AskError,
     ClusterDownError,
