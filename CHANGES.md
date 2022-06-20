@@ -1,7 +1,7 @@
 Changes
 =======
 
-2.0.0 (2022-xx-xx)
+2.0.0 (2022-06-20)
 ------------------
 
 * include `aioredis==1.3.1` source code into `aioredis_cluster._aioredis` and introduce `aioredis_cluster.aioredis` but for compatible and migration period
