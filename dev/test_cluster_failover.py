@@ -2,16 +2,18 @@ import argparse
 import asyncio
 import gc
 import logging
+import random
+import signal
 from collections import deque
 from typing import Counter, Deque, Dict, Mapping, Optional, Set
 
 
 try:
-    from aioredis import Redis
+    from aioredis import Channel, Redis
 except ImportError:
-    from aioredis_cluster.aioredis import Redis
+    from aioredis_cluster.aioredis import Redis, Channel
 
-from aioredis_cluster import create_redis_cluster
+from aioredis_cluster import RedisCluster, create_redis_cluster
 
 
 logger = logging.getLogger(__name__)
@@ -142,6 +144,56 @@ async def start_commands_gun(
         raise
 
 
+async def subscribe_routine(
+    *,
+    redis: RedisCluster,
+    routine_id: int,
+    counters: Counter[str],
+):
+    await asyncio.sleep(0.5)
+    ch_name = f"r{{{routine_id}}}:channel"
+    while True:
+        try:
+            pool = await redis.keys_master(ch_name)
+            counters["subscribe_count"] += 1
+            ch: Channel = (await pool.subscribe(ch_name))[0]
+            counters["subscribe_count"] -= 1
+            # logger.info('Wait channel %s', ch_name)
+            res = await ch.get()
+            counters["pubsub_count"] += int(res)
+            await pool.unsubscribe(ch_name)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error("Channel exception: %r", e)
+
+
+async def other_routine(
+    *,
+    redis: RedisCluster,
+    routine_id: int,
+    counters: Counter[str],
+):
+    key = f"r{{{routine_id}}}:counter"
+    # await asyncio.sleep(1)
+    while True:
+        try:
+            pool = await redis.keys_master(key)
+            with (await pool) as conn:
+                await asyncio.sleep(random.random())
+                counters["local_count"] += 1
+                await conn.incr(key)
+                res = await conn.get(key)
+                await conn.publish(f"r{{{routine_id}}}:channel", "1")
+                counters["redis_count"] = int(res)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error("Other routine exception: %r", e)
+            for node in redis.cluster_connection._pooler._nodes.values():
+                logger.info("Node: %r, used:%r", node, node.pool.used)
+
+
 async def async_main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("node")
@@ -168,18 +220,19 @@ async def async_main() -> None:
     redis = await create_redis_cluster(
         [node_addr],
         pool_minsize=1,
-        pool_maxsize=1,
+        pool_maxsize=2,
         connect_timeout=1.0,
+        follow_cluster=True,
     )
     routine_tasks: Deque[asyncio.Task] = deque()
     try:
-        routine_tasks.extend(
-            create_routines(
-                args.routines,
-                redis,
-                routines_counters=routines_counters,
-            )
-        )
+        # routine_tasks.extend(
+        #     create_routines(
+        #         args.routines,
+        #         redis,
+        #         routines_counters=routines_counters,
+        #     )
+        # )
         # routine_tasks.append(
         #     loop.create_task(
         #         start_commands_gun(
@@ -190,6 +243,27 @@ async def async_main() -> None:
         #     )
         # )
         # last_routine_id = len(routine_tasks)
+
+        for routine_id in range(1, args.routines + 1):
+            counters = routines_counters[routine_id] = Counter()
+            routine_task = asyncio.ensure_future(
+                subscribe_routine(
+                    redis=redis,
+                    routine_id=routine_id,
+                    counters=counters,
+                )
+            )
+            routine_tasks.append(routine_task)
+
+            routine_task = asyncio.ensure_future(
+                other_routine(
+                    redis=redis,
+                    routine_id=routine_id,
+                    counters=counters,
+                )
+            )
+            routine_tasks.append(routine_task)
+
         logger.info("Routines %d", len(routine_tasks))
 
         wait_secs = int(args.wait)
@@ -213,13 +287,16 @@ def main() -> None:
 
     loop = asyncio.get_event_loop()
     main_task = loop.create_task(async_main())
+
+    loop.add_signal_handler(signal.SIGINT, lambda: loop.stop())
+    loop.add_signal_handler(signal.SIGTERM, lambda: loop.stop())
+
     try:
-        loop.run_until_complete(main_task)
-    except KeyboardInterrupt:
+        loop.run_forever()
+    finally:
         if not main_task.done() and not main_task.cancelled():
             main_task.cancel()
-            loop.run_until_complete(main_task)
-    finally:
+            loop.run_until_complete(asyncio.wait([main_task]))
         loop.close()
 
 

@@ -64,20 +64,29 @@ class ConnectionsPool(AbcPool):
         self._released: Deque[RedisConnection] = collections.deque(maxlen=maxsize)
         self._used: Set[RedisConnection] = set()
         self._acquiring = 0
+        self._conn_waiters_count = 0
         self._cond = asyncio.Condition(lock=asyncio.Lock())
         self._close_state = CloseEvent(self._do_close)
         self._pubsub_conn = None
         self._connection_cls = connection_cls
 
     def __repr__(self) -> str:
+        pubsub_exists = 0
+        if self._pubsub_conn and not self._pubsub_conn.closed:
+            pubsub_exists = 1
+
         return (
             f"<{self.__class__.__name__} "
             f"address:{self.address}, "
             f"db:{self.db}, "
             f"minsize:{self.minsize}, "
             f"maxsize:{self.maxsize}, "
-            f"size:{self.size}, "
-            f"free:{self.freesize}>"
+            f"acquiring:{self._acquiring}, "
+            f"conn_waiters:{self._conn_waiters_count}, "
+            f"used:{len(self._used)}, "
+            f"pubsub:{pubsub_exists}, "
+            f"free:{self.freesize}, "
+            f"size:{self.size}>"
         )
 
     @property
@@ -131,9 +140,12 @@ class ConnectionsPool(AbcPool):
             for conn in self._used:
                 conn.close()
                 waiters.append(conn.wait_closed())
+            if self._pubsub_conn:
+                self._pubsub_conn.close()
+                waiters.append(conn.wait_closed())
             await asyncio.gather(*waiters)
             # TODO: close _pubsub_conn connection
-            logger.debug("Closed %d connection(s)", len(waiters))
+            logger.info("Closed %d connection(s)", len(waiters))
 
     def close(self):
         """Close all free and in-progress connections and mark pool as closed."""
@@ -189,7 +201,15 @@ class ConnectionsPool(AbcPool):
         Returns asyncio.gather coroutine waiting for all channels/patterns
         to receive answers.
         """
+        # before_pubsub_conn = self._pubsub_conn
         conn, address = self.get_connection(command)
+        # logger.info(
+        #     "PUBSUB (%s) conn %r, before_pubsub_conn=%r, self._pubsub_conn=%r",
+        #     command,
+        #     id(conn),
+        #     id(before_pubsub_conn),
+        #     id(self._pubsub_conn),
+        # )
         if conn is not None:
             return conn.execute_pubsub(command, *channels)
         else:
@@ -207,6 +227,7 @@ class ConnectionsPool(AbcPool):
         if is_pubsub and self._pubsub_conn:
             if not self._pubsub_conn.closed:
                 return self._pubsub_conn, self._pubsub_conn.address
+            # self._used.remove(self._pubsub_conn)
             self._pubsub_conn = None
         for i in range(self.freesize):
             conn = self._pool[0]
@@ -216,9 +237,10 @@ class ConnectionsPool(AbcPool):
             if conn.in_pubsub:
                 continue
             if is_pubsub:
+                logger.info("PUBSUB from pool")
                 self._pubsub_conn = conn
                 self._pool.remove(conn)
-                self._used.add(conn)
+                # self._used.add(conn)
             return conn, conn.address
         return None, self._address  # figure out
 
@@ -238,6 +260,7 @@ class ConnectionsPool(AbcPool):
             self.release(conn)
 
     async def _wait_execute_pubsub(self, address, command, args, kw):
+        logger.info("Wait PUBSUB conn")
         if self.closed:
             raise PoolClosedError("Pool is closed")
         assert self._pubsub_conn is None or self._pubsub_conn.closed, (
@@ -247,10 +270,12 @@ class ConnectionsPool(AbcPool):
         async with self._cond:
             if self.closed:
                 raise PoolClosedError("Pool is closed")
-            if self._pubsub_conn is None or self._pubsub_conn.closed:
-                conn = await self._create_new_connection(address)
-                self._pubsub_conn = conn
-            conn = self._pubsub_conn
+            if self._pubsub_conn and self._pubsub_conn.closed:
+                self._pubsub_conn = None
+                # self._used.remove(self._pubsub_conn)
+            conn = await self._create_new_connection(address)
+            self._pubsub_conn = conn
+            # self._used.add(conn)
             return await conn.execute_pubsub(command, *args, **kw)
 
     async def select(self, db):
@@ -301,25 +326,40 @@ class ConnectionsPool(AbcPool):
             if self.closed:
                 raise PoolClosedError("Pool is closed")
 
+            count = 0
             acquire_after_wait = False
             while True:
+                count += 1
                 try:
                     await self._fill_free(override_min=True)
                 except (asyncio.CancelledError, Exception):
                     if acquire_after_wait:
-                        acquire_after_wait = False
-                        self._cond.notify()
+                        self._cond.notify(1)
                     raise
 
                 if self.freesize:
-                    conn = self._pool.popleft()
-                    assert not conn.closed, conn
-                    assert conn not in self._used, (conn, self._used)
-                    self._used.add(conn)
-                    return conn
-                else:
+                    if self._conn_waiters_count == 0 or acquire_after_wait:
+                        conn = self._pool.popleft()
+                        assert not conn.closed, conn
+                        assert conn not in self._used, (conn, self._used)
+                        self._used.add(conn)
+                        return conn
+
+                logger.info("wait %s, self._conn_waiters_count %s", count, self._conn_waiters_count)
+                self._conn_waiters_count += 1
+                try:
                     await self._cond.wait()
-                    acquire_after_wait = True
+                finally:
+                    self._conn_waiters_count -= 1
+                acquire_after_wait = True
+
+                # if (self._acquiring == 0 or acquire_after_wait) and self.freesize:
+                #     conn = self._pool.popleft()
+                #     assert not conn.closed, conn
+                #     assert conn not in self._used, (conn, self._used)
+                #     self._used.add(conn)
+                #     return conn
+                # else:
 
     def release(self, conn):
         """Returns used connection back into pool.
@@ -408,7 +448,7 @@ class ConnectionsPool(AbcPool):
     async def _wakeup(self):
         async with self._cond:
             if self._released:
-                self._pool.extend(conn for conn in self._released if not conn.closed)
+                self._pool.extend(self._released)
                 self._used.difference_update(self._released)
                 self._released.clear()
             self._cond.notify()
