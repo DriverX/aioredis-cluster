@@ -275,10 +275,8 @@ class ClusterManager:
             logger.debug("Cluster state auto reload after %.03f sec", reload_interval)
 
             try:
-                await asyncio.wait_for(
-                    self._reload_event.wait(),
-                    reload_interval,
-                )
+                async with async_timeout.timeout(reload_interval):
+                    await self._reload_event.wait()
             except asyncio.TimeoutError:
                 auto_reload = True
 

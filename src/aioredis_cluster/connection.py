@@ -1,6 +1,11 @@
+import logging
+
 from aioredis_cluster._aioredis.util import wait_ok
 from aioredis_cluster.abc import AbcConnection
 from aioredis_cluster.aioredis import RedisConnection as BaseConnection
+
+
+logger = logging.getLogger(__name__)
 
 
 class RedisConnection(BaseConnection, AbcConnection):

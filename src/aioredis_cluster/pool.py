@@ -232,7 +232,6 @@ class ConnectionsPool(AbcPool):
         if is_pubsub and self._pubsub_conn:
             if not self._pubsub_conn.closed:
                 return self._pubsub_conn, self._pubsub_conn.address
-            # self._used.remove(self._pubsub_conn)
             self._pubsub_conn = None
         for i in range(self.freesize):
             conn = self._pool[0]
@@ -406,14 +405,13 @@ class ConnectionsPool(AbcPool):
     async def _fill_free(self, *, override_min):
         # drop closed connections first
         await self._drop_closed()
-        # address = self._address
         while self.size < self.minsize:
             self._acquiring += 1
             try:
                 conn = await self._create_new_connection(self._address)
                 # check the healthy of that connection, if
                 # something went wrong just trigger the Exception
-                await conn.execute("ping")
+                await conn.execute(b"PING")
                 self._pool.append(conn)
             finally:
                 self._acquiring -= 1
