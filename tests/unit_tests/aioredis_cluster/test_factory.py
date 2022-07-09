@@ -51,6 +51,7 @@ async def test_create_cluster__defaults(mocker, cluster_fix):
         pool_maxsize=None,
         connect_timeout=None,
         attempt_timeout=None,
+        ssl=None,
     )
     cluster._init.assert_called_once()
     cluster.wait_closed.assert_not_called()
@@ -98,6 +99,7 @@ async def test_create_cluster__parametrized(mocker, cluster_fix):
         pool_minsize=1,
         pool_maxsize=5,
         connect_timeout=3.5,
+        ssl=None,
     )
 
 

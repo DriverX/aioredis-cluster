@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import ssl
 import time
 from collections import ChainMap
 from time import monotonic
@@ -14,6 +15,7 @@ from typing import (
     Sequence,
     Tuple,
     Type,
+    Union,
 )
 
 from async_timeout import timeout as atimeout
@@ -101,6 +103,7 @@ class Cluster(AbcCluster):
         commands_factory: CommandsFactory = None,
         connect_timeout: float = None,
         pool_cls: Type[AbcPool] = None,
+        ssl: Optional[Union[bool, ssl.SSLContext]] = None,
     ) -> None:
         if len(startup_nodes) < 1:
             raise ValueError("startup_nodes must be one at least")
@@ -169,6 +172,7 @@ class Cluster(AbcCluster):
         if pool_cls is None:
             pool_cls = ConnectionsPool
         self._pool_cls = pool_cls
+        self._pool_ssl = ssl
 
         self._pooler = Pooler(self._create_default_pool, reap_frequency=idle_connection_timeout)
 
@@ -741,6 +745,7 @@ class Cluster(AbcCluster):
             minsize=self._pool_minsize,
             maxsize=self._pool_maxsize,
             create_connection_timeout=self._connect_timeout,
+            ssl=self._pool_ssl,
         )
 
         pool = await create_pool(addr, **{**default_opts, **opts})
