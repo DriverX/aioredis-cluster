@@ -1,7 +1,7 @@
 Changes
 =======
 
-2.1.0 (2022-07-xx)
+2.1.0 (2022-07-10)
 ------------------
 
 * fix bug when `ConnectionsPool.acquire()` is stuck because closed PUB/SUB connection is not cleanup from `used` set
