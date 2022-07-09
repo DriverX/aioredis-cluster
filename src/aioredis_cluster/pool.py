@@ -64,15 +64,15 @@ class ConnectionsPool(AbcPool):
         self._parser_class = parser
         self._minsize = minsize
         self._create_connection_timeout = create_connection_timeout
-        self._pool: Deque[RedisConnection] = collections.deque(maxlen=maxsize)
-        self._released: Deque[RedisConnection] = collections.deque(maxlen=maxsize)
-        self._used: Set[RedisConnection] = set()
+        self._pool: Deque[AbcConnection] = collections.deque(maxlen=maxsize)
+        self._released: Deque[AbcConnection] = collections.deque(maxlen=maxsize)
+        self._used: Set[AbcConnection] = set()
         self._acquiring = 0
         self._conn_waiters_count = 0
         self._release_conn_waiter: Optional[asyncio.Future] = None
         self._cond = asyncio.Condition(lock=asyncio.Lock())
         self._close_state = CloseEvent(self._do_close)
-        self._pubsub_conn: Optional[RedisConnection] = None
+        self._pubsub_conn: Optional[AbcConnection] = None
         if connection_cls is None:
             connection_cls = RedisConnection
         self._connection_cls = connection_cls
@@ -323,7 +323,7 @@ class ConnectionsPool(AbcPool):
             return self._pubsub_conn.pubsub_patterns
         return types.MappingProxyType({})
 
-    async def acquire(self, command=None, args=()):
+    async def acquire(self, command=None, args=()) -> AbcConnection:
         """Acquires a connection from free pool.
 
         Creates new connection if needed.
@@ -359,7 +359,7 @@ class ConnectionsPool(AbcPool):
                     self._conn_waiters_count -= 1
                 acquire_after_wait = True
 
-    def release(self, conn: RedisConnection) -> None:
+    def release(self, conn: AbcConnection) -> None:
         """Returns used connection back into pool.
 
         When returned connection has db index that differs from one in pool
@@ -429,9 +429,9 @@ class ConnectionsPool(AbcPool):
                     # connection may be closed at yield point
                     await self._drop_closed()
 
-    async def _create_new_connection(self, address) -> RedisConnection:
+    async def _create_new_connection(self, address) -> AbcConnection:
         try:
-            conn: RedisConnection = await create_connection(
+            conn: AbcConnection = await create_connection(
                 address,
                 db=self._db,
                 password=self._password,
