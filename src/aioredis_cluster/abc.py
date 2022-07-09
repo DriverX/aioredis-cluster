@@ -2,7 +2,8 @@ from abc import abstractmethod
 from typing import AnyStr, AsyncContextManager, List, Sequence, Union
 
 from aioredis_cluster.aioredis import Redis
-from aioredis_cluster.aioredis.abc import AbcChannel, AbcConnection
+from aioredis_cluster.aioredis.abc import AbcChannel
+from aioredis_cluster.aioredis.abc import AbcConnection as _AbcConnection
 from aioredis_cluster.aioredis.abc import AbcPool as _AbcPool
 from aioredis_cluster.cluster_state import ClusterState
 from aioredis_cluster.structs import Address, ClusterNode
@@ -19,7 +20,7 @@ __all__ = [
 BytesOrStr = Union[bytes, str]
 
 
-class AbcCluster(AbcConnection):
+class AbcCluster(_AbcConnection):
     @abstractmethod
     def determine_slot(self, first_key: bytes, *keys: bytes) -> int:
         pass
@@ -55,6 +56,17 @@ class AbcCluster(AbcConnection):
         pass
 
 
+class AbcConnection(_AbcConnection):
+    @property
+    @abstractmethod
+    def readonly(self) -> bool:
+        pass
+
+    @abstractmethod
+    async def set_readonly(self, value: bool) -> None:
+        pass
+
+
 class AbcPool(_AbcPool):
     @abstractmethod
     def get(self) -> AsyncContextManager[Redis]:
@@ -78,4 +90,13 @@ class AbcPool(_AbcPool):
     @property
     @abstractmethod
     def freesize(self) -> int:
+        pass
+
+    @property
+    @abstractmethod
+    def readonly(self) -> bool:
+        pass
+
+    @abstractmethod
+    async def set_readonly(self, value: bool) -> None:
         pass

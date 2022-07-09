@@ -1,6 +1,21 @@
 Changes
 =======
 
+2.1.0 (2022-07-xx)
+------------------
+
+* fix bug when `ConnectionsPool.acquire()` is stuck because closed PUB/SUB connection is not cleanup from `used` set
+* fix `ConnectionsPool.acquire()` incorrect wakeup order for connection waiters when connection is released
+* `ConnectionsPool.execute()` now acquire dedicate connection for execution if command is blocking, ex. `BLPOP`
+* `ConnectionsPool.execute()` now raises `ValueError` exception for PUB/SUB family command
+* In `ConnectionsPool` PUB/SUB dedicated connections now is closing on `close()` call
+* add `aioredis_cluster.abc.AbcConnection` abstract class
+* add property `readonly` and method `set_readonly()` for `aioredis_cluster.abc.AbcConnection` and `aioredis_cluster.abc.AbcPool`
+* `aioredis_cluster.Cluster` now require `pool_cls` implementation from `aioredis_cluster.abc.AbcPool`
+* add `ssl` argument for factories `create_cluster`,  `create_redis_cluster` and `Cluster` constructor
+* add 10% jitter for cluster state auto reload interval
+* fix incorrect iterate free connections in `select()`, `auth()` methods for `ConnectionsPool`
+
 2.0.0 (2022-06-20)
 ------------------
 

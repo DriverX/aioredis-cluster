@@ -1,6 +1,7 @@
 import random
+import ssl
 import warnings
-from typing import Any, List, Sequence
+from typing import Any, List, Optional, Sequence, Union
 
 from aioredis_cluster import aioredis
 from aioredis_cluster._aioredis.util import parse_url
@@ -37,6 +38,7 @@ async def create_cluster(
     pool_minsize: int = None,
     pool_maxsize: int = None,
     connect_timeout: float = None,
+    ssl: Optional[Union[bool, ssl.SSLContext]] = None,
 ) -> AbcCluster:
     corrected_nodes: List[Address] = []
     for mixed_addr in startup_nodes:
@@ -72,6 +74,7 @@ async def create_cluster(
         pool_maxsize=pool_maxsize,
         connect_timeout=connect_timeout,
         attempt_timeout=attempt_timeout,
+        ssl=ssl,
     )
     try:
         await cluster._init()
@@ -103,6 +106,7 @@ async def create_redis_cluster(
     pool_minsize: int = None,
     pool_maxsize: int = None,
     connect_timeout: float = None,
+    ssl: Optional[Union[bool, ssl.SSLContext]] = None,
 ) -> RedisCluster:
     if cluster_commands_factory is None:
         cluster_commands_factory = RedisCluster
@@ -120,6 +124,7 @@ async def create_redis_cluster(
         pool_maxsize=pool_maxsize,
         connect_timeout=connect_timeout,
         attempt_timeout=attempt_timeout,
+        ssl=ssl,
     )
     return cluster_commands_factory(cluster)
 

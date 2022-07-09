@@ -176,6 +176,7 @@ async def test_create_pool(mocker):
         minsize=5,
         maxsize=15,
         create_connection_timeout=1.2,
+        ssl=None,
     )
 
 
@@ -212,6 +213,7 @@ async def test_create_pool_by_addr(mocker):
         minsize=5,
         maxsize=42,
         create_connection_timeout=1.2,
+        ssl=None,
     )
 
 
