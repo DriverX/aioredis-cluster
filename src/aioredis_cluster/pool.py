@@ -4,7 +4,6 @@ import logging
 import types
 from typing import Deque, Optional, Set, Tuple, Type, Union
 
-from aioredis_cluster._aioredis.connection import _PUBSUB_COMMANDS
 from aioredis_cluster._aioredis.pool import (
     _AsyncConnectionContextManager,
     _ConnectionContextManager,
@@ -12,6 +11,10 @@ from aioredis_cluster._aioredis.pool import (
 from aioredis_cluster._aioredis.util import CloseEvent
 from aioredis_cluster.abc import AbcConnection, AbcPool
 from aioredis_cluster.aioredis import PoolClosedError, create_connection
+from aioredis_cluster.command_info.commands import (
+    BLOCKING_COMMANDS,
+    PUBSUB_COMMANDS,
+)
 from aioredis_cluster.connection import RedisConnection
 from aioredis_cluster.errors import ConnectTimeoutError
 
@@ -190,16 +193,20 @@ class ConnectionsPool(AbcPool):
         free connection to execute command.
         """
         command = command.upper().strip()
-        if command in _PUBSUB_COMMANDS:
+        if command in PUBSUB_COMMANDS:
             raise ValueError(f"PUB/SUB command {command!r} is prohibited for use with .execute()")
 
-        conn, address = self.get_connection(command, args)
-        if conn is not None:
-            fut = conn.execute(command, *args, **kw)
-            return self._check_result(fut, command, args, kw)
-        else:
-            coro = self._wait_execute(address, command, args, kw)
+        if command in BLOCKING_COMMANDS:
+            coro = self._wait_execute(self._address, command, args, kw)
             return self._check_result(coro, command, args, kw)
+        else:
+            conn, address = self.get_connection(command, args)
+            if conn is not None:
+                fut = conn.execute(command, *args, **kw)
+                return self._check_result(fut, command, args, kw)
+            else:
+                coro = self._wait_execute(address, command, args, kw)
+                return self._check_result(coro, command, args, kw)
 
     def execute_pubsub(self, command: TBytesOrStr, *channels):
         """Executes Redis (p)subscribe/(p)unsubscribe commands.
@@ -228,7 +235,7 @@ class ConnectionsPool(AbcPool):
         # TODO: find a better way to determine if connection is free
         #       and not havily used.
         command = command.upper().strip()
-        is_pubsub = command in _PUBSUB_COMMANDS
+        is_pubsub = command in PUBSUB_COMMANDS
         if is_pubsub and self._pubsub_conn:
             if not self._pubsub_conn.closed:
                 return self._pubsub_conn, self._pubsub_conn.address

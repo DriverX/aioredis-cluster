@@ -1,4 +1,6 @@
 # redis command output (v5.0.8)
+from typing import FrozenSet, Iterable, MutableSet, Union
+
 
 __all__ = (
     "COMMANDS",
@@ -8,7 +10,18 @@ __all__ = (
     "ZUNIONSTORE_COMMANDS",
     "XREAD_COMMAND",
     "XREADGROUP_COMMAND",
+    "PUBSUB_COMMANDS",
 )
+
+
+def _gen_commands_set(commands: Iterable[str]) -> FrozenSet[Union[bytes, str]]:
+    cmd_set: MutableSet[Union[bytes, str]] = set()
+    for cmd in commands:
+        cmd = cmd.upper()
+        cmd_set.add(cmd)
+        cmd_set.add(cmd.encode("latin1"))
+    return frozenset(cmd_set)
+
 
 COMMANDS = [
     ["xclaim", -6, ["write", "random", "fast"], 1, 1, 1],
@@ -214,7 +227,7 @@ COMMANDS = [
 ]
 
 
-BLOCKING_COMMANDS = frozenset(
+BLOCKING_COMMANDS = _gen_commands_set(
     {
         "BLPOP",
         "BRPOP",
@@ -228,14 +241,14 @@ BLOCKING_COMMANDS = frozenset(
     }
 )
 
-EVAL_COMMANDS = frozenset(
+EVAL_COMMANDS = _gen_commands_set(
     {
         "EVAL",
         "EVALSHA",
     }
 )
 
-ZUNION_COMMANDS = frozenset(
+ZUNION_COMMANDS = _gen_commands_set(
     {
         "ZUNION",
         "ZINTER",
@@ -243,7 +256,7 @@ ZUNION_COMMANDS = frozenset(
     }
 )
 
-ZUNIONSTORE_COMMANDS = frozenset(
+ZUNIONSTORE_COMMANDS = _gen_commands_set(
     {
         "ZUNIONSTORE",
         "ZINTERSTORE",
@@ -253,3 +266,13 @@ ZUNIONSTORE_COMMANDS = frozenset(
 
 XREAD_COMMAND = "XREAD"
 XREADGROUP_COMMAND = "XREADGROUP"
+
+
+PUBSUB_COMMANDS = _gen_commands_set(
+    {
+        "SUBSCRIBE",
+        "PSUBSCRIBE",
+        "UNSUBSCRIBE",
+        "PUNSUBSCRIBE",
+    }
+)
