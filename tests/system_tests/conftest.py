@@ -4,6 +4,7 @@ import os
 from typing import List, Tuple, Union
 
 import pytest
+import pytest_asyncio
 
 from aioredis_cluster import create_cluster, create_redis_cluster
 from aioredis_cluster.util import unused_port as _unused_port
@@ -43,7 +44,7 @@ def unused_port():
     return _unused_port
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def redis_cluster():
     _client = None
     _client_kwargs = None
@@ -70,7 +71,7 @@ async def redis_cluster():
             logging.exception("Unable to cleanup redis cluster nodes")
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def cluster():
     _client = None
     _client_kwargs = None

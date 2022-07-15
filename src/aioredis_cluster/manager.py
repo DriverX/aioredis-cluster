@@ -28,19 +28,11 @@ from aioredis_cluster.structs import Address, ClusterNode, ClusterSlot
 
 __all__ = (
     "ClusterManager",
-    "slots_ranges",
     "create_cluster_state",
 )
 
 
 SlotsResponse = List[List]
-CLUSTER_INFO_STATE_KEY = "cluster_state"
-CLUSTER_INFO_CURRENT_EPOCH_KEY = "cluster_current_epoch"
-CLUSTER_INFO_SLOTS_ASSIGNED = "cluster_slots_assigned"
-
-
-def slots_ranges(slots: Sequence[ClusterSlot]) -> List[Tuple[int, int]]:
-    return [(s.begin, s.end) for s in slots]
 
 
 def create_cluster_state(
