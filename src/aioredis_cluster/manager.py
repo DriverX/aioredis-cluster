@@ -3,7 +3,7 @@ import logging
 import random
 from contextlib import suppress
 from operator import attrgetter
-from typing import Dict, List, Optional, Sequence, Set, Tuple
+from typing import Dict, List, Optional, Sequence, Set
 
 import async_timeout
 
