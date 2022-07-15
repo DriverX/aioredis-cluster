@@ -592,7 +592,7 @@ async def test_execute__retriable_error_in_unexpected_call(mocker):
         (LoadingError("LOADING loading"), Address("random", 6379), 1),
         (ProtocolError(), Address("random", 6379), 1),
         (ConnectionClosedError(), Address("random_replica", 6379), 1),
-        (ConnectionForcedCloseError(), Address("random_replica", 6379), 1),
+        (ConnectionForcedCloseError(), Address("random_replica", 6379), 0),
         (PoolClosedError(), Address("random_replica", 6379), 1),
     ],
 )

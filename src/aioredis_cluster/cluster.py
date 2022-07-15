@@ -22,7 +22,11 @@ from async_timeout import timeout as atimeout
 
 from aioredis_cluster.abc import AbcChannel, AbcCluster, AbcPool
 from aioredis_cluster.aioredis import Redis, create_pool
-from aioredis_cluster.aioredis.errors import ProtocolError, ReplyError
+from aioredis_cluster.aioredis.errors import (
+    ConnectionForcedCloseError,
+    ProtocolError,
+    ReplyError,
+)
 from aioredis_cluster.command_exec import (
     ExecuteContext,
     ExecuteFailProps,
@@ -675,9 +679,13 @@ class Cluster(AbcCluster):
         # set mark to reload cluster state if needed
 
         exc = fail_props.error
+        print(exc)
         if isinstance(exc, network_errors):
             logger.warning("Connection problem with %s: %r", fail_props.node_addr, exc)
             self._manager.require_reload_state()
+        elif isinstance(exc, ConnectionForcedCloseError):
+            logger.warning("Connection is force closed")
+            self._check_closed()
         elif isinstance(exc, closed_errors):
             logger.warning("Connection is closed: %r", exc)
             self._manager.require_reload_state()
