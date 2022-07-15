@@ -417,7 +417,7 @@ async def test_execute__success_several_problem_retry(mocker):
 
     assert mocked_manager.get_state.call_count == 10
     assert mocked_pooler.ensure_pool.call_count == 10
-    assert mocked_manager.require_reload_state.call_count == 8
+    assert mocked_manager.require_reload_state.call_count == 7
     assert result == ("result", 10)
 
     ensure_pool_calls = mocked_pooler.ensure_pool.call_args_list
@@ -446,7 +446,7 @@ async def test_execute__success_several_problem_retry(mocker):
     state.slot_master.assert_called_once_with(12539)
     assert state.random_slot_replica.call_count == 1
     assert state.random_slot_replica.call_args == mock.call(12539)
-    assert state.random_node.call_count == 5
+    assert state.random_node.call_count == 4
     assert mocked_execute_retry_slowdown.call_count == 9
 
     asking_calls = [c for c in conn.execute.call_args_list if c == mock.call(b"ASKING")]
@@ -586,7 +586,7 @@ async def test_execute__retriable_error_in_unexpected_call(mocker):
         (OSError(), Address("random_replica", 6379), 1),
         (ConnectTimeoutError(object()), Address("random_replica", 6379), 1),
         (ClusterDownError("CLUSTERDOWN clusterdown"), Address("random", 6379), 1),
-        (TryAgainError("TRYAGAIN tryagain"), Address("random", 6379), 1),
+        (TryAgainError("TRYAGAIN tryagain"), Address("master", 6379), 0),
         (MovedError("MOVED 12539 1.2.3.4:1000"), Address("1.2.3.4", 1000), 1),
         (AskError("ASK 12539 1.2.3.4:1000"), Address("1.2.3.4", 1000), 0),
         (LoadingError("LOADING loading"), Address("random", 6379), 1),

@@ -14,7 +14,7 @@ from .commands import (
 )
 
 
-__all__ = [
+__all__ = (
     "CommandsRegistry",
     "CommandInfo",
     "CommandInfoError",
@@ -22,7 +22,7 @@ __all__ = [
     "extract_keys",
     "create_registry",
     "unknown_command",
-]
+)
 
 
 class CommandInfoError(Exception):
@@ -163,7 +163,7 @@ def _extract_keys_xread(
     return list(exec_command[first_key_arg : first_key_arg + nom_of_keys])
 
 
-def extract_keys(info: CommandInfo, exec_command: Sequence[bytes]) -> List[bytes]:
+def _extract_params_check(info: CommandInfo, exec_command: Sequence[bytes]) -> None:
     if len(exec_command) < 1:
         raise ValueError("Execute command is empty")
 
@@ -173,6 +173,10 @@ def extract_keys(info: CommandInfo, exec_command: Sequence[bytes]) -> List[bytes
 
     if info.arity > 0 and len(exec_command) > info.arity or len(exec_command) < abs(info.arity):
         _raise_wrong_num_of_arguments(info)
+
+
+def extract_keys(info: CommandInfo, exec_command: Sequence[bytes]) -> List[bytes]:
+    _extract_params_check(info, exec_command)
 
     # special parsing for command
     if info.name in EVAL_COMMANDS:

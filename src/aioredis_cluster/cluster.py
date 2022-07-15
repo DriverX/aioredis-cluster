@@ -527,10 +527,11 @@ class Cluster(AbcCluster):
         if cmd_info.is_unknown():
             logger.warning("No info found for command %r", cmd_info.name)
         ctx = ExecuteContext(
-            cmd=list(iter_ensure_bytes(args)),
+            cmd=tuple(iter_ensure_bytes(args)),
             cmd_info=cmd_info,
             kwargs=kwargs,
             max_attempts=self._max_attempts,
+            start_time=self._loop.time(),
         )
         return ctx
 
@@ -546,8 +547,7 @@ class Cluster(AbcCluster):
         return keys
 
     async def _execute_retry_slowdown(self, attempt: int, max_attempts: int) -> None:
-        # first two tries run immediately
-        if attempt <= 1:
+        if attempt < 1:
             return
 
         delay = retry_backoff(attempt - 1, self._retry_min_delay, self._retry_max_delay)
@@ -567,9 +567,8 @@ class Cluster(AbcCluster):
         if fail_props:
             # reraise exception for simplify classification
             # instead of many isinstance conditions
-            try:
-                raise fail_props.error
-            except self._connection_errors:
+            exc = fail_props.error
+            if isinstance(exc, self._connection_errors):
                 if ctx.attempt <= 2 and ctx.slot is not None:
                     replica = state.random_slot_replica(ctx.slot)
                     if replica is not None:
@@ -578,18 +577,27 @@ class Cluster(AbcCluster):
                         node_addr = state.random_node().addr
                 else:
                     node_addr = state.random_node().addr
-            except MovedError as e:
-                node_addr = Address(e.info.host, e.info.port)
-            except AskError as e:
-                node_addr = Address(e.info.host, e.info.port)
-                exec_props.asking = e.info.ask
-            except (ClusterDownError, TryAgainError, LoadingError, ProtocolError):
+            elif isinstance(exc, MovedError):
+                node_addr = Address(exc.info.host, exc.info.port)
+            elif isinstance(exc, AskError):
+                node_addr = Address(exc.info.host, exc.info.port)
+                exec_props.asking = exc.info.ask
+            elif isinstance(exc, TryAgainError):
+                node_addr = fail_props.node_addr
+            elif isinstance(exc, (ClusterDownError, LoadingError, ProtocolError)):
                 node_addr = state.random_node().addr
-            except Exception as e:
+            elif isinstance(exc, Exception):
                 # usualy never be done here
-                logger.exception("Uncaught exception on execute: %r", e)
-                raise
-            logger.info("New node to execute: %s", node_addr)
+                logger.exception("Uncaught exception on execute: %r", exc, exc_info=exc)
+                raise exc
+
+            if node_addr != fail_props.node_addr:
+                logger.info(
+                    "Change node to execute: %s->%s",
+                    fail_props.node_addr,
+                    node_addr,
+                )
+
         else:
             if ctx.slot is not None:
                 try:
@@ -665,47 +673,48 @@ class Cluster(AbcCluster):
     async def _on_execute_fail(self, ctx: ExecuteContext, fail_props: ExecuteFailProps) -> None:
         # classify error for logging and
         # set mark to reload cluster state if needed
-        try:
-            raise fail_props.error
-        except network_errors as e:
-            logger.warning("Connection problem with %s: %r", fail_props.node_addr, e)
+
+        exc = fail_props.error
+        if isinstance(exc, network_errors):
+            logger.warning("Connection problem with %s: %r", fail_props.node_addr, exc)
             self._manager.require_reload_state()
-        except closed_errors as e:
-            logger.warning("Connection is closed: %r", e)
+        elif isinstance(exc, closed_errors):
+            logger.warning("Connection is closed: %r", exc)
             self._manager.require_reload_state()
-        except ConnectTimeoutError as e:
-            logger.warning("Connect to node is timed out: %s", e)
+        elif isinstance(exc, ConnectTimeoutError):
+            logger.warning("Connect to node is timed out: %s", exc)
             self._manager.require_reload_state()
-        except ClusterDownError as e:
-            logger.warning("Cluster is down: %s", e)
+        elif isinstance(exc, ClusterDownError):
+            logger.warning("Cluster is down: %s", exc)
             self._manager.require_reload_state()
-        except TryAgainError as e:
-            logger.warning("Try again error: %s", e)
+        elif isinstance(exc, TryAgainError):
+            logger.warning("Try again error: %s", exc)
+        elif isinstance(exc, MovedError):
+            logger.info("MOVED reply: %s", exc)
             self._manager.require_reload_state()
-        except MovedError as e:
-            logger.info("MOVED reply: %s", e)
+        elif isinstance(exc, AskError):
+            logger.info("ASK reply: %s", exc)
+        elif isinstance(exc, LoadingError):
+            logger.warning("Cluster node %s is loading: %s", fail_props.node_addr, exc)
             self._manager.require_reload_state()
-        except AskError as e:
-            logger.info("ASK reply: %s", e)
-        except LoadingError as e:
-            logger.warning("Cluster node %s is loading: %s", fail_props.node_addr, e)
+        elif isinstance(exc, ProtocolError):
+            logger.warning("Redis protocol error: %s", exc)
             self._manager.require_reload_state()
-        except ProtocolError as e:
-            logger.warning("Redis protocol error: %s", e)
-            self._manager.require_reload_state()
-        except ReplyError as e:
+        elif isinstance(exc, ReplyError):
             # all other reply error we must propagate to caller
-            logger.warning("Reply error: %s", e)
-            raise
-        except asyncio.TimeoutError:
+            logger.warning("Reply error: %s", exc)
+            raise exc
+        elif isinstance(exc, asyncio.TimeoutError):
             is_readonly = ctx.cmd_info.is_readonly()
             if is_readonly:
                 logger.warning(
-                    "Read-Only command %s to %s is timed out", ctx.cmd_name, fail_props.node_addr
+                    "Read-Only command %s to %s is timed out",
+                    ctx.cmd_name,
+                    fail_props.node_addr,
                 )
             else:
                 logger.warning(
-                    "Non-idempotent command %s to %s is timed out. " "Abort command",
+                    "Non-idempotent command %s to %s is timed out. Abort command",
                     ctx.cmd_name,
                     fail_props.node_addr,
                 )
@@ -715,14 +724,20 @@ class Cluster(AbcCluster):
 
             # abort non-idempotent commands
             if not is_readonly:
-                raise
+                raise exc
 
-        except Exception as e:
-            logger.exception("Unexpected error: %r", e)
-            raise
+        elif isinstance(exc, Exception):
+            logger.exception("Unexpected error: %r", exc, exc_info=exc)
+            raise exc
 
         if ctx.attempt >= ctx.max_attempts:
-            raise fail_props.error
+            logger.warning(
+                "Command %s failed after %d attempts and %.03f sec",
+                ctx.cmd_name,
+                ctx.attempt,
+                self._loop.time() - ctx.start_time,
+            )
+            raise exc
 
         # slowdown retry calls
         await self._execute_retry_slowdown(ctx.attempt, ctx.max_attempts)

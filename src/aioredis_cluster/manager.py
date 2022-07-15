@@ -10,8 +10,10 @@ import async_timeout
 from aioredis_cluster.abc import AbcConnection
 from aioredis_cluster.cluster_state import (
     ClusterState,
+    ClusterStateCandidate,
     NodeClusterState,
     _ClusterStateData,
+    parse_cluster_info,
 )
 from aioredis_cluster.command_info import (
     CommandsRegistry,
@@ -22,7 +24,6 @@ from aioredis_cluster.errors import RedisError, network_errors
 from aioredis_cluster.log import logger
 from aioredis_cluster.pooler import Pooler
 from aioredis_cluster.structs import Address, ClusterNode, ClusterSlot
-from aioredis_cluster.util import parse_info
 
 
 __all__ = (
@@ -43,22 +44,22 @@ def slots_ranges(slots: Sequence[ClusterSlot]) -> List[Tuple[int, int]]:
 
 
 def create_cluster_state(
-    slots_resp: SlotsResponse,
-    cluster_info: Dict[str, str],
-    state_from: Address,
+    state_candidate: ClusterStateCandidate,
+    reload_id: int,
 ) -> ClusterState:
     state_data = _ClusterStateData()
-    state_data.state = NodeClusterState(cluster_info[CLUSTER_INFO_STATE_KEY])
-    state_data.state_from = state_from
-    state_data.current_epoch = int(cluster_info[CLUSTER_INFO_CURRENT_EPOCH_KEY])
-    state_data.slots_assigned = int(cluster_info[CLUSTER_INFO_SLOTS_ASSIGNED])
+    state_data.state = state_candidate.cluster_info.state
+    state_data.state_from = state_candidate.node
+    state_data.current_epoch = state_candidate.cluster_info.current_epoch
+    state_data.slots_assigned = state_candidate.cluster_info.slots_assigned
+    state_data.reload_id = reload_id
 
     nodes: Dict[Address, ClusterNode] = {}
     master_replicas: Dict[Address, List[ClusterNode]] = {}
     masters_set: Set[ClusterNode] = set()
     replicas_set: Set[ClusterNode] = set()
 
-    for slot_spec in slots_resp:
+    for slot_spec in state_candidate.slots_response:
         master_node: Optional[ClusterNode] = None
         slot_begin = int(slot_spec[0])
         slot_end = int(slot_spec[1])
@@ -106,6 +107,14 @@ def create_cluster_state(
     return ClusterState(state_data)
 
 
+class ClusterManagerError(RedisError):
+    pass
+
+
+class ClusterUnavailableError(ClusterManagerError):
+    pass
+
+
 class ClusterManager:
     STATE_RELOAD_INTERVAL = 300.0
     EXECUTE_TIMEOUT = 5.0
@@ -118,6 +127,7 @@ class ClusterManager:
         state_reload_interval: float = None,
         follow_cluster: bool = None,
         execute_timeout: float = None,
+        reload_state_candidates: int = None,
     ) -> None:
         self._startup_nodes = list(startup_nodes)
         self._pooler = pooler
@@ -139,6 +149,11 @@ class ClusterManager:
             execute_timeout = self._reload_interval
 
         self._execute_timeout = execute_timeout
+        if reload_state_candidates is None:
+            reload_state_candidates = 2
+        elif reload_state_candidates < 1:
+            raise ValueError("`reload_state_candidates` cannot be lower than 1")
+        self._reload_state_candidates = reload_state_candidates
 
         self._reload_count = 0
         self._reload_event = asyncio.Event()
@@ -169,7 +184,12 @@ class ClusterManager:
             with suppress(asyncio.CancelledError):
                 await self._reloader_task
 
-    async def _fetch_state(self, addrs: Sequence[Address]) -> ClusterState:
+    async def _fetch_state(
+        self,
+        addrs: Sequence[Address],
+        reload_id: int,
+        current_state: Optional[ClusterState],
+    ) -> ClusterState:
         if len(addrs) == 0:
             raise RuntimeError("no addrs to fetch cluster state")
 
@@ -182,6 +202,8 @@ class ClusterManager:
             addrs = addrs[: max(10, len(addrs) // 2)]
 
         logger.debug("Trying to obtain cluster state from addrs: %r", addrs)
+
+        state_candidates: List[ClusterStateCandidate] = []
 
         # get first successful cluster slots response
         for addr in addrs:
@@ -208,7 +230,7 @@ class ClusterManager:
                             b"INFO",
                             encoding="utf-8",
                         )
-                        cluster_info = parse_info(raw_cluster_info)
+                        cluster_info = parse_cluster_info(raw_cluster_info)
                         slots_resp = await conn.execute(
                             b"CLUSTER",
                             b"SLOTS",
@@ -228,41 +250,68 @@ class ClusterManager:
                 logger.warning("Unable to get cluster state from %s: %r", addr, e)
                 continue
 
-            if cluster_info[CLUSTER_INFO_STATE_KEY] != NodeClusterState.OK.value:
+            if cluster_info.state is not NodeClusterState.OK:
                 logger.warning(
                     'Node %s was return not "ok" cluster state "%s". Try next node',
                     addr,
-                    cluster_info[CLUSTER_INFO_STATE_KEY],
+                    cluster_info.state,
                 )
                 continue
 
+            state_candidate = ClusterStateCandidate(
+                node=addr,
+                cluster_info=cluster_info,
+                slots_response=slots_resp,
+            )
+            state_candidates.append(state_candidate)
+
             logger.debug(
-                "Cluster state successful loaded from %s: info:%r slots:%r",
+                "Cluster state candidate #%d successful loaded from %s: info:%r slots:%r",
+                len(state_candidates) + 1,
                 addr,
                 cluster_info,
                 slots_resp,
             )
 
-            break
+            if len(state_candidates) >= self._reload_state_candidates:
+                break
         else:
-            if last_err is not None:
+            if not state_candidates and last_err is not None:
                 logger.error("No available hosts to load cluster slots. Tried hosts: %r", addrs)
                 raise last_err
 
-        state = create_cluster_state(slots_resp, cluster_info, addr)
-
-        if state.state is not NodeClusterState.OK:
-            logger.warning(
-                (
-                    "Cluster probably broken. Tried %d nodes and "
-                    'apply not "ok" (%s) cluster state from %s'
-                ),
-                len(addrs),
-                state.state.value,
-                addr,
-            )
+        if not state_candidates:
+            raise ClusterUnavailableError()
+        else:
+            state_candidate = self._choose_state_candidate(state_candidates)
+            if (
+                current_state is not None
+                and current_state.current_epoch == state_candidate.cluster_info.current_epoch
+                and current_state.slots_assigned == state_candidate.cluster_info.slots_assigned
+            ):
+                state = current_state
+            else:
+                state = create_cluster_state(state_candidate, reload_id)
 
         return state
+
+    def _choose_state_candidate(
+        self,
+        state_candidates: Sequence[ClusterStateCandidate],
+    ) -> ClusterStateCandidate:
+        iter_state_candidates = iter(state_candidates)
+        current = next(iter_state_candidates)
+        for candidate in iter_state_candidates:
+            info = candidate.cluster_info
+            current_info = current.cluster_info
+            if info.current_epoch > current_info.current_epoch:
+                current = candidate
+            elif (
+                info.current_epoch == current_info.current_epoch
+                and info.slots_assigned > current_info.slots_assigned
+            ):
+                current = candidate
+        return current
 
     async def _state_reloader(self) -> None:
         while True:
@@ -294,6 +343,11 @@ class ClusterManager:
                 raise
             except network_errors + (RedisError,) as e:
                 logger.warning("Unable to load cluster state: %r (%d)", e, reload_id)
+            except ClusterUnavailableError:
+                logger.warning(
+                    "Unable to load any state from cluster. "
+                    "Probably cluster is completely unavailable"
+                )
             except Exception as e:
                 logger.exception(
                     "Unexpected error while loading cluster state: %r (%d)", e, reload_id
@@ -316,7 +370,7 @@ class ClusterManager:
         commands: Optional[CommandsRegistry] = None
 
         init_addrs = self._get_init_addrs(reload_id)
-        state = await self._fetch_state(init_addrs)
+        state = await self._fetch_state(init_addrs, reload_id, self._state)
 
         # initialize connections pool for every master node in new state
         for node in state._data.masters:
@@ -338,7 +392,7 @@ class ClusterManager:
 
         if logger.isEnabledFor(logging.INFO):
             logger.info(
-                "Loaded state: %s (reload_id=%d)",
+                "Loaded cluster state: %s (reload_id=%d)",
                 state.repr_stats(),
                 reload_id,
             )

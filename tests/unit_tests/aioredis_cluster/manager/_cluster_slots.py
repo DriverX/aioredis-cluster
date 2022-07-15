@@ -34,15 +34,15 @@ SLOTS = [
 ]
 
 
-INFO = {
-    "cluster_state": "ok",
-    "cluster_current_epoch": "1",
-    "cluster_slots_assigned": "16384",
-    "cluster_slots_ok": "16384",
-    "cluster_slots_pfail": "0",
-    "cluster_slots_fail": "0",
-    "cluster_known_nodes": "6",
-    "cluster_size": "3",
-    "cluster_current_epoch": "1",
-    "cluster_my_epoch": "1",
-}
+INFO = """
+cluster_state:ok
+cluster_current_epoch:1
+cluster_slots_assigned:16384
+cluster_slots_ok:16384
+cluster_slots_pfail:0
+cluster_slots_fail:0
+cluster_known_nodes:6
+cluster_size:3
+cluster_current_epoch:1
+cluster_my_epoch:1
+"""
