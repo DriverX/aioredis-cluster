@@ -104,6 +104,7 @@ jobs:
             src:
               - '.github/workflows/**'
               - 'src/aioredis_cluster/_aioredis/**'
+              - 'src/aioredis_cluster/aioredis/**'
               - 'tests/aioredis_tests/**'
               - setup.cfg
       - id: force_run
