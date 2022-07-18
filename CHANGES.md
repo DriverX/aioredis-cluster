@@ -1,6 +1,14 @@
 Changes
 =======
 
+2.2.0 (2022-07-18)
+------------------
+
+* fetch several cluster state candidates from cluster for choose best metadata for final local state
+* apply cluster state only if cluster metadata is changed
+* FIX: handle closed pubsub connection before gc its collected that trigger `Task was destroyed but it is pending!` message in log
+* improve logging in state loader
+
 2.1.0 (2022-07-10)
 ------------------
 
