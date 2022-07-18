@@ -2,7 +2,7 @@ import asyncio
 import collections
 import logging
 import types
-from typing import Deque, Optional, Set, Tuple, Type, Union
+from typing import Deque, List, Optional, Set, Tuple, Type, Union
 
 from aioredis_cluster._aioredis.pool import (
     _AsyncConnectionContextManager,
@@ -26,12 +26,12 @@ TBytesOrStr = Union[bytes, str]
 
 
 class ConnectionsPool(AbcPool):
-    """Redis connections pool."""
+    """Redis connections pool for cluster."""
 
     def __init__(
         self,
         address: Union[str, Tuple[str, int]],
-        db=None,
+        db: int = None,
         password=None,
         encoding=None,
         *,
@@ -57,6 +57,10 @@ class ConnectionsPool(AbcPool):
             raise ValueError(f"Invalid pool min/max sizes minsize={minsize}, maxsize={maxsize}")
 
         self._address = address
+        if db is None:
+            db = 0
+        elif db != 0:
+            raise ValueError("`db` for cluster must be 0")
         self._db = db
         self._password = password
         if readonly is None:
@@ -66,6 +70,7 @@ class ConnectionsPool(AbcPool):
         self._encoding = encoding
         self._parser_class = parser
         self._minsize = minsize
+        self._maxsize = maxsize
         self._create_connection_timeout = create_connection_timeout
         self._pool: Deque[AbcConnection] = collections.deque(maxlen=maxsize)
         self._released: Deque[AbcConnection] = collections.deque(maxlen=maxsize)
@@ -100,22 +105,22 @@ class ConnectionsPool(AbcPool):
         )
 
     @property
-    def minsize(self):
+    def minsize(self) -> int:
         """Minimum pool size."""
         return self._minsize
 
     @property
-    def maxsize(self):
+    def maxsize(self) -> int:
         """Maximum pool size."""
-        return self._pool.maxlen
+        return self._maxsize
 
     @property
-    def size(self):
+    def size(self) -> int:
         """Current pool size."""
         return self.freesize + len(self._used) + self._acquiring
 
     @property
-    def freesize(self):
+    def freesize(self) -> int:
         """Current number of free connections."""
         return len(self._pool)
 
@@ -123,7 +128,7 @@ class ConnectionsPool(AbcPool):
     def address(self):
         return self._address
 
-    async def clear(self):
+    async def clear(self) -> None:
         """Clear pool connections.
 
         Close and remove all free connections.
@@ -145,7 +150,7 @@ class ConnectionsPool(AbcPool):
 
         async with self._cond:
             assert not self._acquiring, self._acquiring
-            waiters = []
+            waiters: List[asyncio.Future] = []
             while self._pool:
                 conn = self._pool.popleft()
                 conn.close()
@@ -156,34 +161,35 @@ class ConnectionsPool(AbcPool):
             if self._pubsub_conn:
                 self._pubsub_conn.close()
                 waiters.append(self._pubsub_conn.wait_closed())
+                self._pubsub_conn = None
             await asyncio.gather(*waiters)
             logger.info("Closed %d connection(s)", len(waiters))
 
-    def close(self):
+    def close(self) -> None:
         """Close all free and in-progress connections and mark pool as closed."""
         if not self._close_state.is_set():
             self._close_state.set()
 
     @property
-    def closed(self):
+    def closed(self) -> bool:
         """True if pool is closed."""
         return self._close_state.is_set()
 
-    async def wait_closed(self):
+    async def wait_closed(self) -> None:
         """Wait until pool gets closed."""
         await self._close_state.wait()
 
     @property
-    def db(self):
+    def db(self) -> int:
         """Currently selected db index."""
-        return self._db or 0
+        return self._db
 
     @property
-    def encoding(self):
+    def encoding(self) -> Optional[str]:
         """Current set codec or None."""
         return self._encoding
 
-    def execute(self, command: TBytesOrStr, *args, **kw):
+    async def execute(self, command: TBytesOrStr, *args, **kw):
         """Executes redis command in a free connection and returns
         future waiting for result.
 
@@ -198,17 +204,18 @@ class ConnectionsPool(AbcPool):
 
         if command in BLOCKING_COMMANDS:
             coro = self._wait_execute(self._address, command, args, kw)
-            return self._check_result(coro, command, args, kw)
+            res = await self._check_result(coro, command, args, kw)
         else:
             conn, address = self.get_connection(command, args)
             if conn is not None:
                 fut = conn.execute(command, *args, **kw)
-                return self._check_result(fut, command, args, kw)
+                res = await self._check_result(fut, command, args, kw)
             else:
                 coro = self._wait_execute(address, command, args, kw)
-                return self._check_result(coro, command, args, kw)
+                res = await self._check_result(coro, command, args, kw)
+        return res
 
-    def execute_pubsub(self, command: TBytesOrStr, *channels):
+    async def execute_pubsub(self, command: TBytesOrStr, *channels):
         """Executes Redis (p)subscribe/(p)unsubscribe commands.
 
         ConnectionsPool picks separate connection for pub/sub
@@ -221,11 +228,21 @@ class ConnectionsPool(AbcPool):
         Returns asyncio.gather coroutine waiting for all channels/patterns
         to receive answers.
         """
-        conn, address = self.get_connection(command)
-        if conn is not None:
-            return conn.execute_pubsub(command, *channels)
-        else:
-            return self._wait_execute_pubsub(address, command, channels, {})
+
+        self._check_closed()
+
+        if self._pubsub_conn is None or self._pubsub_conn.closed:
+            async with self._cond:
+                self._check_closed()
+                if self._pubsub_conn and self._pubsub_conn.closed:
+                    closing_conn = self._pubsub_conn
+                    self._pubsub_conn = None
+                    await closing_conn.wait_closed()
+                if self._pubsub_conn is None:
+                    self._pubsub_conn = await self._create_new_connection(self._address)
+
+        res = await self._pubsub_conn.execute_pubsub(command, *channels)
+        return res
 
     def get_connection(self, command: TBytesOrStr, args=()):
         """Get free connection from pool.
@@ -234,12 +251,14 @@ class ConnectionsPool(AbcPool):
         """
         # TODO: find a better way to determine if connection is free
         #       and not havily used.
+
         command = command.upper().strip()
         is_pubsub = command in PUBSUB_COMMANDS
-        if is_pubsub and self._pubsub_conn:
-            if not self._pubsub_conn.closed:
+        if is_pubsub:
+            if self._pubsub_conn and not self._pubsub_conn.closed:
                 return self._pubsub_conn, self._pubsub_conn.address
-            self._pubsub_conn = None
+            return None, self._address
+
         for i in range(self.freesize):
             conn = self._pool[0]
             self._pool.rotate(1)
@@ -268,33 +287,13 @@ class ConnectionsPool(AbcPool):
         finally:
             self.release(conn)
 
-    async def _wait_execute_pubsub(self, address, command, args, kw):
+    def _check_closed(self) -> None:
         if self.closed:
             raise PoolClosedError("Pool is closed")
-        assert self._pubsub_conn is None or self._pubsub_conn.closed, (
-            "Expected no or closed connection",
-            self._pubsub_conn,
-        )
-        async with self._cond:
-            if self.closed:
-                raise PoolClosedError("Pool is closed")
-            if self._pubsub_conn and self._pubsub_conn.closed:
-                self._pubsub_conn = None
-            conn = await self._create_new_connection(address)
-            self._pubsub_conn = conn
-            return await conn.execute_pubsub(command, *args, **kw)
 
     async def select(self, db):
-        """Changes db index for all free connections.
-
-        All previously acquired connections will be closed when released.
-        """
-        res = True
-        async with self._cond:
-            for conn in tuple(self._pool):
-                res = res and (await conn.select(db))
-            self._db = db
-        return res
+        """For cluster implementation this method is unavailable"""
+        raise NotImplementedError("Feature is blocked in cluster mode")
 
     async def auth(self, password) -> None:
         self._password = password
@@ -335,12 +334,10 @@ class ConnectionsPool(AbcPool):
 
         Creates new connection if needed.
         """
-        if self.closed:
-            raise PoolClosedError("Pool is closed")
+        self._check_closed()
 
         async with self._cond:
-            if self.closed:
-                raise PoolClosedError("Pool is closed")
+            self._check_closed()
 
             acquire_after_wait = False
             while True:

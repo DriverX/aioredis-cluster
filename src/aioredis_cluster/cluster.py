@@ -679,7 +679,6 @@ class Cluster(AbcCluster):
         # set mark to reload cluster state if needed
 
         exc = fail_props.error
-        print(exc)
         if isinstance(exc, network_errors):
             logger.warning("Connection problem with %s: %r", fail_props.node_addr, exc)
             self._manager.require_reload_state()
