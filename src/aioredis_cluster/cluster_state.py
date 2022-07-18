@@ -1,3 +1,4 @@
+import dataclasses
 import datetime
 import enum
 import random
@@ -12,6 +13,11 @@ __all__ = (
     "NodeClusterState",
     "ClusterState",
 )
+
+
+CLUSTER_INFO_STATE_KEY = "cluster_state"
+CLUSTER_INFO_CURRENT_EPOCH_KEY = "cluster_current_epoch"
+CLUSTER_INFO_SLOTS_ASSIGNED = "cluster_slots_assigned"
 
 
 @enum.unique
@@ -41,8 +47,46 @@ class _ClusterStateData:
         # master address -> list of replicas
         self.replicas: Dict[Address, List[ClusterNode]] = {}
         self.slots: List[ClusterSlot] = []
+        self.reload_id: int
         self.created_at = datetime.datetime.now()
         self.created_at_local = time.monotonic()
+
+
+@dataclasses.dataclass
+class ClusterInfo:
+    state: NodeClusterState
+    current_epoch: int
+    slots_assigned: int
+
+
+def parse_cluster_info(info: str) -> ClusterInfo:
+    state: Optional[NodeClusterState] = None
+    current_epoch: Optional[int] = None
+    slots_assigned: Optional[int] = None
+    for line in info.strip().splitlines():
+        key, value = line.split(":", 1)
+        if key == CLUSTER_INFO_STATE_KEY:
+            state = NodeClusterState(value)
+        elif key == CLUSTER_INFO_CURRENT_EPOCH_KEY:
+            current_epoch = int(value)
+        elif key == CLUSTER_INFO_SLOTS_ASSIGNED:
+            slots_assigned = int(value)
+
+    if state is None or current_epoch is None or slots_assigned is None:
+        raise ValueError("Invalid cluster info")
+
+    return ClusterInfo(
+        state=state,
+        current_epoch=current_epoch,
+        slots_assigned=slots_assigned,
+    )
+
+
+@dataclasses.dataclass
+class ClusterStateCandidate:
+    node: Address
+    cluster_info: ClusterInfo
+    slots_response: List[List] = dataclasses.field(repr=False)
 
 
 class ClusterState:
@@ -60,6 +104,7 @@ class ClusterState:
             repr_parts = [
                 f"state:{data.state.value}",
                 f"state_from:{data.state_from}",
+                f"reload_id:{data.reload_id}",
                 f"created:{data.created_at.isoformat()}",
                 f"nodes:{len(data.nodes)}",
                 f"masters:{len(data.masters)}",
@@ -86,6 +131,10 @@ class ClusterState:
     @property
     def slots_assigned(self) -> int:
         return self._data.slots_assigned
+
+    @property
+    def reload_id(self) -> int:
+        return self._data.reload_id
 
     def find_slot(self, slot: int) -> ClusterSlot:
         slots = self._data.slots

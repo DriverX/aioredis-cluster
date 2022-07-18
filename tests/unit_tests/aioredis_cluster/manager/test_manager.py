@@ -5,7 +5,7 @@ import mock
 import pytest
 
 from aioredis_cluster.cluster_state import ClusterState, NodeClusterState
-from aioredis_cluster.manager import ClusterManager
+from aioredis_cluster.manager import ClusterManager, ClusterUnavailableError
 from aioredis_cluster.structs import Address, ClusterNode
 
 from ._cluster_slots import SLOTS
@@ -153,7 +153,11 @@ async def test_load_state(mocker, pooler_mock):
     assert result is mocked_state
     assert result is manager._state
     assert manager._commands is mocked_create_registry.return_value
-    mocked_fetch_state.assert_called_once_with(["addr1", "addr2"])
+    mocked_fetch_state.assert_called_once_with(
+        ["addr1", "addr2"],
+        1,
+        None,
+    )
     mocked_create_registry.assert_called_once_with(
         pooler.ensure_pool.return_value.execute.return_value
     )
@@ -188,19 +192,57 @@ async def test_fetch_state__first_response(pooler_mock, mocker):
     conn.execute.side_effect = [
         "cluster_state:ok\ncluster_current_epoch:1\ncluster_slots_assigned:16384",
         cluster_slots_resp,
+        "cluster_state:ok\ncluster_current_epoch:1\ncluster_slots_assigned:16384",
+        cluster_slots_resp,
     ]
     manager = ClusterManager(["addr1"], pooler)
     mocked_create_cluster_state = mocker.patch(ClusterManager.__module__ + ".create_cluster_state")
 
-    result = await manager._fetch_state(["addr2", "addr3"])
+    result = await manager._fetch_state(
+        ["addr2", "addr3"],
+        1,
+        None,
+    )
 
     assert result is mocked_create_cluster_state.return_value
-    pooler.ensure_pool.assert_called_once_with("addr2")
+    pooler.ensure_pool.await_count == 2
+    assert pooler.ensure_pool.call_args_list[0] == mock.call("addr2")
+    assert pooler.ensure_pool.call_args_list[1] == mock.call("addr3")
     pool.get.asssert_called_once()
-    assert conn.execute.await_count == 2
+    assert conn.execute.await_count == 4
     execute_calls = conn.execute.call_args_list
     assert execute_calls[0] == mock.call(b"CLUSTER", b"INFO", encoding="utf-8")
     assert execute_calls[1] == mock.call(b"CLUSTER", b"SLOTS", encoding="utf-8")
+    assert execute_calls[2] == mock.call(b"CLUSTER", b"INFO", encoding="utf-8")
+    assert execute_calls[3] == mock.call(b"CLUSTER", b"SLOTS", encoding="utf-8")
+
+
+async def test_fetch_state__choose_state_candidate(pooler_mock, mocker):
+    pooler = pooler_mock()
+    conn = pooler._conn
+    cluster_slots_resp = object()
+    conn.execute.side_effect = [
+        "cluster_state:ok\ncluster_current_epoch:1\ncluster_slots_assigned:12000",
+        cluster_slots_resp,
+        "cluster_state:ok\ncluster_current_epoch:1\ncluster_slots_assigned:16384",
+        cluster_slots_resp,
+        "cluster_state:ok\ncluster_current_epoch:2\ncluster_slots_assigned:16384",
+        cluster_slots_resp,
+    ]
+    manager = ClusterManager(["addr1"], pooler, reload_state_candidates=3)
+    mocked_create_cluster_state = mocker.patch(ClusterManager.__module__ + ".create_cluster_state")
+
+    result = await manager._fetch_state(
+        ["addr2", "addr3", "addr4", "addr5_not_iterable"],
+        1,
+        None,
+    )
+
+    assert result is mocked_create_cluster_state.return_value
+    candidate = mocked_create_cluster_state.call_args[0][0]
+    assert candidate.node == "addr4"
+    assert candidate.cluster_info.current_epoch == 2
+    assert candidate.cluster_info.slots_assigned == 16384
 
 
 async def test_fetch_state__with_fail_state(pooler_mock, mocker):
@@ -211,9 +253,12 @@ async def test_fetch_state__with_fail_state(pooler_mock, mocker):
         SLOTS,
     ]
     manager = ClusterManager(["addr1"], pooler)
-    result = await manager._fetch_state(["addr2"])
-
-    assert result.state is NodeClusterState.FAIL
+    with pytest.raises(ClusterUnavailableError):
+        await manager._fetch_state(
+            ["addr2"],
+            1,
+            None,
+        )
 
 
 async def test_fetch_state__with_error_but_success(pooler_mock):
@@ -229,20 +274,24 @@ async def test_fetch_state__with_error_but_success(pooler_mock):
     pooler.ensure_pool.side_effect = ensure_pool_se
 
     conn.execute.side_effect = [
-        # first try
+        # addr2 fail
         "cluster_state:fail\ncluster_current_epoch:1\ncluster_slots_assigned:16384",
-        object(),
-        # second try
+        ValueError("Invalid cluster info"),
+        # addr3 fail
         "cluster_state:ok\ncluster_current_epoch:1\ncluster_slots_assigned:16384",
         RuntimeError("execute fail"),
-        # success third try
+        # addr3 success
         "cluster_state:ok\ncluster_current_epoch:1\ncluster_slots_assigned:16384",
         SLOTS,
     ]
 
     manager = ClusterManager(["addr1"], pooler)
 
-    result = await manager._fetch_state(["addr1", "addr2", "addr3", "addr4"])
+    result = await manager._fetch_state(
+        ["addr1", "addr2", "addr3", "addr4"],
+        1,
+        None,
+    )
 
     assert isinstance(result, ClusterState)
     assert result.state is NodeClusterState.OK
@@ -289,7 +338,11 @@ async def test_fetch_state__with_error(pooler_mock):
     manager = ClusterManager(["addr1"], pooler)
 
     with pytest.raises(RuntimeError, match="third error"):
-        await manager._fetch_state(["addr1", "addr2", "addr3"])
+        await manager._fetch_state(
+            ["addr1", "addr2", "addr3"],
+            1,
+            None,
+        )
 
     assert pooler.ensure_pool.call_count == 3
     pooler.ensure_pool.assert_has_calls(
