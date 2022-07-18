@@ -16,9 +16,9 @@ except ImportError:
     )
 
 try:
-    from aioredis.connection import RedisConnection, create_connection
+    from aioredis.connection import RedisConnection
 except ImportError:
-    from .._aioredis.connection import RedisConnection, create_connection
+    from .._aioredis.connection import RedisConnection
 
 try:
     from aioredis.errors import (
@@ -61,9 +61,9 @@ except ImportError:
         WatchVariableError,
     )
 try:
-    from aioredis.pool import ConnectionsPool, create_pool
+    from aioredis.pool import ConnectionsPool
 except ImportError:
-    from .._aioredis.pool import ConnectionsPool, create_pool
+    from .._aioredis.pool import ConnectionsPool
 try:
     from aioredis.pubsub import Channel
 except ImportError:
@@ -72,6 +72,9 @@ try:
     from aioredis.sentinel import RedisSentinel, create_sentinel
 except ImportError:
     from .._aioredis.sentinel import RedisSentinel, create_sentinel
+
+from .connection import create_connection
+from .pool import create_pool
 
 
 __version__ = "1.3.1"

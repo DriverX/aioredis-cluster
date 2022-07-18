@@ -266,9 +266,6 @@ class ConnectionsPool(AbcPool):
                 continue
             if conn.in_pubsub:
                 continue
-            if is_pubsub:
-                self._pubsub_conn = conn
-                self._pool.remove(conn)
             return conn, conn.address
         return None, self._address  # figure out
 
@@ -437,7 +434,7 @@ class ConnectionsPool(AbcPool):
         try:
             conn: AbcConnection = await create_connection(
                 address,
-                db=self._db,
+                db=None,
                 password=self._password,
                 ssl=self._ssl,
                 encoding=self._encoding,
