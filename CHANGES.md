@@ -1,6 +1,11 @@
 Changes
 =======
 
+2.2.1 (2022-07-18)
+------------------
+
+* (revert) apply cluster state only if cluster metadata is changed
+
 2.2.0 (2022-07-18)
 ------------------
 
