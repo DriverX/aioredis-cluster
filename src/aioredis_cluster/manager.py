@@ -275,14 +275,7 @@ class ClusterManager:
             raise ClusterUnavailableError()
         else:
             state_candidate = self._choose_state_candidate(state_candidates)
-            if (
-                current_state is not None
-                and current_state.current_epoch == state_candidate.cluster_info.current_epoch
-                and current_state.slots_assigned == state_candidate.cluster_info.slots_assigned
-            ):
-                state = current_state
-            else:
-                state = create_cluster_state(state_candidate, reload_id)
+            state = create_cluster_state(state_candidate, reload_id)
 
         return state
 
