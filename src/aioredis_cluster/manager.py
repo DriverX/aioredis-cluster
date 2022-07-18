@@ -259,7 +259,7 @@ class ClusterManager:
 
             logger.debug(
                 "Cluster state candidate #%d successful loaded from %s: info:%r slots:%r",
-                len(state_candidates) + 1,
+                len(state_candidates),
                 addr,
                 cluster_info,
                 slots_resp,
@@ -267,12 +267,11 @@ class ClusterManager:
 
             if len(state_candidates) >= self._reload_state_candidates:
                 break
-        else:
-            if not state_candidates and last_err is not None:
-                logger.error("No available hosts to load cluster slots. Tried hosts: %r", addrs)
-                raise last_err
 
         if not state_candidates:
+            logger.error("No available hosts to load cluster slots. Tried hosts: %r", addrs)
+            if last_err is not None:
+                raise last_err
             raise ClusterUnavailableError()
         else:
             state_candidate = self._choose_state_candidate(state_candidates)
@@ -337,15 +336,18 @@ class ClusterManager:
                 logger.warning("Unable to load cluster state: %r (%d)", e, reload_id)
             except ClusterUnavailableError:
                 logger.warning(
-                    "Unable to load any state from cluster. "
-                    "Probably cluster is completely unavailable"
+                    (
+                        "Unable to load any state from cluster. "
+                        "Probably cluster is completely unavailable (%d)"
+                    ),
+                    reload_id,
                 )
             except Exception as e:
                 logger.exception(
                     "Unexpected error while loading cluster state: %r (%d)", e, reload_id
                 )
             else:
-                logger.info("Cluster state successful loaded (%d)", reload_id)
+                logger.debug("Cluster state successful loaded (%d)", reload_id)
 
             await asyncio.sleep(0.1)
             self._reload_event.clear()
