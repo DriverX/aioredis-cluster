@@ -1,6 +1,12 @@
 Changes
 =======
 
+2.2.2 (2022-07-19)
+------------------
+
+* fix problem when RedisConnection was GC collected after unhandled `asyncio.CancelledError`
+* fix default `db` argument for pool/connection in cluster mode
+
 2.2.1 (2022-07-18)
 ------------------
 
