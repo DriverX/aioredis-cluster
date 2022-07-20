@@ -1,6 +1,6 @@
 PYTHON ?= python3
 EGG_INFO = src/aioredis_cluster.egg-info
-LINT_FORMAT_PATHS = tests src dev
+LINT_FORMAT_PATHS = tests src dev benchmarks
 
 .PHONY: all
 all: black isort flake mypy tests
