@@ -160,19 +160,19 @@ def parse_url(url):
     if r.scheme == "unix":
         assert r.path, ("Empty path is not allowed", url)
         assert not r.netloc, ("Netlocation is not allowed for unix scheme", r.netloc)
-        return r.path, _parse_uri_options(query, "", r.password)
+        return r.path, _parse_uri_options(query, "", r.username, r.password)
 
     address = (r.hostname or "localhost", int(r.port or 6379))
     path = r.path
     if path.startswith("/"):
         path = r.path[1:]
-    options = _parse_uri_options(query, path, r.password)
+    options = _parse_uri_options(query, path, r.username, r.password)
     if r.scheme == "rediss":
         options["ssl"] = True
     return address, options
 
 
-def _parse_uri_options(params, path, password):
+def _parse_uri_options(params, path, username, password):
     def parse_db_num(val):
         if not val:
             return
@@ -192,6 +192,9 @@ def _parse_uri_options(params, path, password):
         options["db"] = db1
     elif db2 is not None:
         options["db"] = db2
+
+    if username:
+        options["username"] = username
 
     password2 = params.get("password")
     assert (
