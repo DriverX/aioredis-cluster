@@ -19,7 +19,11 @@ from aioredis_cluster._aioredis.util import parse_url
         ("redis://host:1234", ("host", 1234), {}),
         ("redis://user@localhost", ("localhost", 6379), {"username": "user"}),
         ("redis://:secret@localhost", ("localhost", 6379), {"password": "secret"}),
-        ("redis://user:secret@localhost", ("localhost", 6379), {"username": "user", "password": "secret"}),
+        (
+            "redis://user:secret@localhost",
+            ("localhost", 6379),
+            {"username": "user", "password": "secret"}
+        ),
         ("redis://localhost?password=secret", ("localhost", 6379), {"password": "secret"}),
         ("redis://localhost?encoding=utf-8", ("localhost", 6379), {"encoding": "utf-8"}),
         ("redis://localhost?ssl=true", ("localhost", 6379), {"ssl": True}),
@@ -36,7 +40,7 @@ from aioredis_cluster._aioredis.util import parse_url
         ("rediss://redis-host", ("redis-host", 6379), {"ssl": True}),
         ("rediss://redis-host", ("redis-host", 6379), {"ssl": True}),
         ("rediss://host:1234", ("host", 1234), {"ssl": True}),
-        ("rediss://user@localhost", ("localhost", 6379), {"username": "user","ssl": True}),
+        ("rediss://user@localhost", ("localhost", 6379), {"username": "user", "ssl": True}),
         ("rediss://:secret@localhost", ("localhost", 6379), {"ssl": True, "password": "secret"}),
         (
             "rediss://user:secret@localhost",
