@@ -15,6 +15,7 @@ async def create_pool(
     address,
     *,
     db=None,
+    username=None,
     password=None,
     ssl=None,
     encoding=None,
@@ -47,6 +48,7 @@ async def create_pool(
     if isinstance(address, str):
         address, options = parse_url(address)
         db = options.setdefault("db", db)
+        username = options.setdefault("username", username)
         password = options.setdefault("password", password)
         encoding = options.setdefault("encoding", encoding)
         create_connection_timeout = options.setdefault("timeout", create_connection_timeout)
@@ -64,6 +66,7 @@ async def create_pool(
         db,
         password,
         encoding,
+        username=username,
         minsize=minsize,
         maxsize=maxsize,
         ssl=ssl,
@@ -91,6 +94,7 @@ class ConnectionsPool(AbcPool):
         password=None,
         encoding=None,
         *,
+        username=None,
         minsize,
         maxsize,
         ssl=None,
@@ -115,6 +119,7 @@ class ConnectionsPool(AbcPool):
             warnings.warn("The loop argument is deprecated", DeprecationWarning)
         self._address = address
         self._db = db
+        self._username = username
         self._password = password
         self._ssl = ssl
         self._encoding = encoding
@@ -325,6 +330,13 @@ class ConnectionsPool(AbcPool):
             for i in range(self.freesize):
                 await self._pool[i].auth(password)
 
+    async def auth_with_username(self, username, password):
+        self._username = username
+        self._password = password
+        async with self._cond:
+            for i in range(self.freesize):
+                await self._pool[i].auth_with_username(username, password)
+
     @property
     def in_pubsub(self):
         if self._pubsub_conn and not self._pubsub_conn.closed:
@@ -435,6 +447,7 @@ class ConnectionsPool(AbcPool):
         return create_connection(
             address,
             db=self._db,
+            username=self._username,
             password=self._password,
             ssl=self._ssl,
             encoding=self._encoding,

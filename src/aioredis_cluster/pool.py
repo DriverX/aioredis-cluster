@@ -35,6 +35,7 @@ class ConnectionsPool(AbcPool):
         password=None,
         encoding=None,
         *,
+        username=None,
         minsize: int,
         maxsize: int,
         ssl=None,
@@ -62,6 +63,7 @@ class ConnectionsPool(AbcPool):
         elif db != 0:
             raise ValueError("`db` for cluster must be 0")
         self._db = db
+        self._username = username
         self._password = password
         if readonly is None:
             readonly = False
@@ -298,6 +300,13 @@ class ConnectionsPool(AbcPool):
             for conn in tuple(self._pool):
                 await conn.auth(password)
 
+    async def auth_with_username(self, username, password) -> None:
+        self._username = username
+        self._password = password
+        async with self._cond:
+            for conn in tuple(self._pool):
+                await conn.auth_with_username(username, password)
+
     @property
     def readonly(self) -> bool:
         return self._readonly
@@ -435,6 +444,7 @@ class ConnectionsPool(AbcPool):
             conn: AbcConnection = await create_connection(
                 address,
                 db=None,
+                username=self._username,
                 password=self._password,
                 ssl=self._ssl,
                 encoding=self._encoding,

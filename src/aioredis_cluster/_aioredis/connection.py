@@ -56,6 +56,7 @@ async def create_connection(
     address,
     *,
     db=None,
+    username=None,
     password=None,
     ssl=None,
     encoding=None,
@@ -95,6 +96,7 @@ async def create_connection(
         address, options = parse_url(address)
         logger.debug("Parsed Redis URI %r", address)
         db = options.setdefault("db", db)
+        username = options.setdefault("username", username)
         password = options.setdefault("password", password)
         encoding = options.setdefault("encoding", encoding)
         timeout = options.setdefault("timeout", timeout)
@@ -144,7 +146,10 @@ async def create_connection(
 
     try:
         if password is not None:
-            await conn.auth(password)
+            if username is not None:
+                await conn.auth_with_username(username, password)
+            else:
+                await conn.auth(password)
         if db is not None:
             await conn.select(db)
     except Exception:
@@ -552,4 +557,9 @@ class RedisConnection(AbcConnection):
     def auth(self, password):
         """Authenticate to server."""
         fut = self.execute("AUTH", password)
+        return wait_ok(fut)
+
+    def auth_with_username(self, username, password):
+        """Authenticate to server with username and password."""
+        fut = self.execute("AUTH", username, password)
         return wait_ok(fut)
