@@ -559,7 +559,7 @@ class RedisConnection(AbcConnection):
         fut = self.execute("AUTH", password)
         return wait_ok(fut)
 
-    async def auth_with_username(self, username, password):
+    def auth_with_username(self, username, password):
         """Authenticate to server with username and password."""
         fut = self.execute("AUTH", username, password)
         return wait_ok(fut)
