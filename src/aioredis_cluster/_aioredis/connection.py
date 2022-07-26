@@ -562,8 +562,4 @@ class RedisConnection(AbcConnection):
     async def auth_with_username(self, username, password):
         """Authenticate to server with username and password."""
         fut = self.execute("AUTH", username, password)
-        result = await wait_ok(fut)
-
-        if not result:
-            # Server doesn't support AUTH via username and password, downgrading
-            return await self.auth(password)
+        return wait_ok(fut)
