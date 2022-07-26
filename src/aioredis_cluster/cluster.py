@@ -100,6 +100,7 @@ class Cluster(AbcCluster):
         # pool options
         idle_connection_timeout: float = None,
         # node client options
+        username: str = None,
         password: str = None,
         encoding: str = None,
         pool_minsize: int = None,
@@ -144,6 +145,7 @@ class Cluster(AbcCluster):
             raise ValueError("attempt_timeout must be > 0")
         self._attempt_timeout = float(attempt_timeout)
 
+        self._username = username
         self._password = password
         self._encoding = encoding
 
@@ -380,6 +382,19 @@ class Cluster(AbcCluster):
         async def authorize(pool) -> None:
             nonlocal password
             await pool.auth(password)
+
+        await self._pooler.batch_op(authorize)
+
+    async def auth_with_username(self, username: str, password: str) -> None:
+        self._check_closed()
+
+        self._username = username
+        self._password = password
+
+        async def authorize(pool) -> None:
+            nonlocal username
+            nonlocal password
+            await pool.auth_with_username(username, password)
 
         await self._pooler.batch_op(authorize)
 

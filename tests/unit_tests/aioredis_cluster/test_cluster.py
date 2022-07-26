@@ -42,6 +42,7 @@ def get_pooler_mock():
     pool = mocked.ensure_pool.return_value
     pool.execute = create_async_mock()
     pool.auth = create_async_mock()
+    pool.auth_with_username = create_async_mock()
     pool.acquire = create_async_mock(return_value=conn)
     pool.maxsize = 10
     pool.minsize = 1
@@ -259,6 +260,31 @@ async def test_auth(mocker):
         [
             mock.call("PASSWORD"),
             mock.call("PASSWORD"),
+        ]
+    )
+
+
+async def test_auth_with_username(mocker):
+    cl = Cluster(["addr1"])
+
+    mocked_pooler = mocker.patch.object(cl, "_pooler", new=get_pooler_mock())
+    pool_mock = mocked_pooler.ensure_pool.return_value
+
+    async def batch_op_se(fn):
+        for p in [pool_mock, pool_mock]:
+            await fn(p)
+
+    mocked_pooler.batch_op = create_async_mock(side_effect=batch_op_se)
+
+    await cl.auth_with_username("USERNAME", "PASSWORD")
+
+    assert cl._username == "USERNAME"
+    assert cl._password == "PASSWORD"
+    mocked_pooler.batch_op.assert_called_once()
+    pool_mock.auth_with_username.assert_has_calls(
+        [
+            mock.call("USERNAME", "PASSWORD"),
+            mock.call("USERNAME", "PASSWORD"),
         ]
     )
 

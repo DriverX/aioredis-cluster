@@ -33,6 +33,7 @@ async def create_cluster(
     # pool options
     idle_connection_timeout: float = None,
     # node client options
+    username: str = None,
     password: str = None,
     encoding: str = None,
     pool_minsize: int = None,
@@ -68,6 +69,7 @@ async def create_cluster(
         state_reload_interval=state_reload_interval,
         follow_cluster=follow_cluster,
         idle_connection_timeout=idle_connection_timeout,
+        username=username,
         password=password,
         encoding=encoding,
         pool_minsize=pool_minsize,
@@ -101,6 +103,7 @@ async def create_redis_cluster(
     # pool options
     idle_connection_timeout: float = None,
     # node client options
+    username: str = None,
     password: str = None,
     encoding: str = None,
     pool_minsize: int = None,
@@ -118,6 +121,7 @@ async def create_redis_cluster(
         state_reload_interval=state_reload_interval,
         follow_cluster=follow_cluster,
         idle_connection_timeout=idle_connection_timeout,
+        username=username,
         password=password,
         encoding=encoding,
         pool_minsize=pool_minsize,
