@@ -27,3 +27,8 @@ class RedisConnection(BaseConnection, AbcConnection):
             fut = self.execute(b"READWRITE")
         await wait_ok(fut)
         self._readonly = value
+
+    async def auth_with_username(self, username: str, password: str) -> bool:
+        """Authenticate to server with username and password."""
+        fut = self.execute("AUTH", username, password)
+        return await wait_ok(fut)

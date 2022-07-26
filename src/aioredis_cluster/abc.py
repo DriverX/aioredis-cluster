@@ -67,7 +67,7 @@ class AbcConnection(_AbcConnection):
         pass
 
     @abstractmethod
-    async def auth_with_username(self, username: str, password: str) -> None:
+    async def auth_with_username(self, username: str, password: str) -> bool:
         pass
 
 
