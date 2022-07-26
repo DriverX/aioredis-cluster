@@ -66,6 +66,10 @@ class AbcConnection(_AbcConnection):
     async def set_readonly(self, value: bool) -> None:
         pass
 
+    @abstractmethod
+    async def auth_with_username(self, username: str, password: str) -> None:
+        pass
+
 
 class AbcPool(_AbcPool):
     @abstractmethod
@@ -99,4 +103,8 @@ class AbcPool(_AbcPool):
 
     @abstractmethod
     async def set_readonly(self, value: bool) -> None:
+        pass
+
+    @abstractmethod
+    async def auth_with_username(self, username: str, password: str) -> None:
         pass
