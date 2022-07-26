@@ -22,7 +22,7 @@ from aioredis_cluster._aioredis.util import parse_url
         (
             "redis://user:secret@localhost",
             ("localhost", 6379),
-            {"username": "user", "password": "secret"}
+            {"username": "user", "password": "secret"},
         ),
         ("redis://localhost?password=secret", ("localhost", 6379), {"password": "secret"}),
         ("redis://localhost?encoding=utf-8", ("localhost", 6379), {"encoding": "utf-8"}),
