@@ -1,6 +1,14 @@
 Changes
 =======
 
+
+2.3.0 (2022-07-26)
+------------------
+
+* add support Redis 6 `AUTH` command with username
+* factories `create_cluster`, `create_redis_cluster`, `aioredis_cluster.aioredis.create_connection` now support `username` argument
+* add `auth_with_username` method for `AbcConnection`, `AbcPool` and impementations
+
 2.2.2 (2022-07-19)
 ------------------
 
