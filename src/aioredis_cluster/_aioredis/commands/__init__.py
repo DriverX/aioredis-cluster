@@ -109,6 +109,13 @@ class Redis(
         """
         return self._pool_or_conn.auth(password)
 
+    def auth_with_username(self, username, password):
+        """Authenticate to server via username and password.
+
+        This method wraps call to :meth:`aioredis.RedisConnection.auth_with_username()`
+        """
+        return self._pool_or_conn.auth_with_username(username, password)
+
     def echo(self, message, *, encoding=_NOTSET):
         """Echo the given string."""
         return self.execute("ECHO", message, encoding=encoding)
