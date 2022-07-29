@@ -16,6 +16,7 @@ async def create_pool(
     address: Union[str, Tuple[str, int], List],
     *,
     db: int = None,
+    username: str = None,
     password: str = None,
     ssl: Union[bool, ssl.SSLContext] = None,
     encoding: str = None,
@@ -60,17 +61,24 @@ async def create_pool(
             ssl = ssl or options["ssl"]
         # TODO: minsize/maxsize
 
-    pool = cls(
-        address,
-        db,
-        password,
-        encoding,
+    pool_kw = dict(
+        password=password,
+        encoding=encoding,
         minsize=minsize,
         maxsize=maxsize,
         ssl=ssl,
         parser=parser,
         create_connection_timeout=create_connection_timeout,
         connection_cls=connection_cls,
+    )
+
+    if username is not None:
+        pool_kw["username"] = username
+
+    pool = cls(
+        address,
+        db,
+        **pool_kw,
     )
     try:
         await pool._fill_free(override_min=False)
