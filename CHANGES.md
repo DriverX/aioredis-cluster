@@ -1,6 +1,10 @@
 Changes
 =======
 
+2.3.1 (2022-07-29)
+------------------
+
+* fix bypass `username` argument for pool creation
 
 2.3.0 (2022-07-26)
 ------------------
