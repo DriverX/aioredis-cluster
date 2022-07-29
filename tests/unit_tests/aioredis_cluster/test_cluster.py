@@ -151,12 +151,14 @@ async def test_init__customized(mocker):
     )
 
 
-async def test_create_pool(mocker):
+@pytest.mark.parametrize("username", [None, "github"])
+async def test_create_pool(mocker, username):
     mocked_create_pool = mocker.patch(Cluster.__module__ + ".create_pool", new=create_async_mock())
 
     pool_cls = mock.Mock()
     cl = Cluster(
         ["addr1"],
+        username=username,
         password="foobar",
         encoding="utf-8",
         pool_minsize=5,
@@ -172,6 +174,7 @@ async def test_create_pool(mocker):
     mocked_create_pool.assert_called_once_with(
         "addr2",
         pool_cls=pool_cls,
+        username=username,
         password="foobar",
         encoding="utf-8",
         minsize=5,
@@ -209,6 +212,7 @@ async def test_create_pool_by_addr(mocker):
     mocked_create_pool.assert_called_once_with(
         ("addr2", 8002),
         pool_cls=pool_cls,
+        username=None,
         password="foobar",
         encoding="utf-8",
         minsize=5,

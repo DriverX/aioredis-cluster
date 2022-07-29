@@ -90,24 +90,24 @@ class Cluster(AbcCluster):
         startup_nodes: Sequence[Address],
         *,
         # failover options
-        retry_min_delay: float = None,
-        retry_max_delay: float = None,
-        max_attempts: int = None,
-        attempt_timeout: float = None,
+        retry_min_delay: Optional[float] = None,
+        retry_max_delay: Optional[float] = None,
+        max_attempts: Optional[int] = None,
+        attempt_timeout: Optional[float] = None,
         # manager options
-        state_reload_interval: float = None,
-        follow_cluster: bool = None,
+        state_reload_interval: Optional[float] = None,
+        follow_cluster: Optional[bool] = None,
         # pool options
-        idle_connection_timeout: float = None,
+        idle_connection_timeout: Optional[float] = None,
         # node client options
-        username: str = None,
-        password: str = None,
-        encoding: str = None,
-        pool_minsize: int = None,
-        pool_maxsize: int = None,
-        commands_factory: CommandsFactory = None,
-        connect_timeout: float = None,
-        pool_cls: Type[AbcPool] = None,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        encoding: Optional[str] = None,
+        pool_minsize: Optional[int] = None,
+        pool_maxsize: Optional[int] = None,
+        commands_factory: Optional[CommandsFactory] = None,
+        connect_timeout: Optional[float] = None,
+        pool_cls: Optional[Type[AbcPool]] = None,
         ssl: Optional[Union[bool, ssl.SSLContext]] = None,
     ) -> None:
         if len(startup_nodes) < 1:
@@ -767,6 +767,7 @@ class Cluster(AbcCluster):
 
         default_opts: Dict[str, Any] = dict(
             pool_cls=self._pool_cls,
+            username=self._username,
             password=self._password,
             encoding=self._encoding,
             minsize=self._pool_minsize,
