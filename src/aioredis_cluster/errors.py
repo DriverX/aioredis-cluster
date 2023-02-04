@@ -6,7 +6,6 @@ from aioredis_cluster.aioredis.errors import (
 )
 from aioredis_cluster.util import parse_moved_response_error
 
-
 __all__ = [
     "ConnectTimeoutError",
     "RedisClusterError",

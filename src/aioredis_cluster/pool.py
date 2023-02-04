@@ -1,8 +1,9 @@
 import asyncio
 import collections
+import itertools
 import logging
 import types
-from typing import Deque, List, Optional, Set, Tuple, Type, Union
+from typing import Deque, Dict, List, Mapping, Optional, Set, Tuple, Type, Union
 
 from aioredis_cluster._aioredis.pool import (
     _AsyncConnectionContextManager,
@@ -10,19 +11,23 @@ from aioredis_cluster._aioredis.pool import (
 )
 from aioredis_cluster._aioredis.util import CloseEvent
 from aioredis_cluster.abc import AbcConnection, AbcPool
-from aioredis_cluster.aioredis import PoolClosedError, create_connection
+from aioredis_cluster.aioredis import Channel, PoolClosedError, create_connection
 from aioredis_cluster.command_info.commands import (
     BLOCKING_COMMANDS,
     PUBSUB_COMMANDS,
+    PUBSUB_FAMILY_COMMANDS,
+    SHARDED_PUBSUB_COMMANDS,
 )
 from aioredis_cluster.connection import RedisConnection
 from aioredis_cluster.errors import ConnectTimeoutError
-
 
 logger = logging.getLogger(__name__)
 
 
 TBytesOrStr = Union[bytes, str]
+
+
+POOL_IDLE_CONNECTIOM_TIMEOUT = 60.0 * 10
 
 
 class ConnectionsPool(AbcPool):
@@ -31,19 +36,20 @@ class ConnectionsPool(AbcPool):
     def __init__(
         self,
         address: Union[str, Tuple[str, int]],
-        db: int = None,
-        password: str = None,
-        encoding: str = None,
+        db: Optional[int] = None,
+        password: Optional[str] = None,
+        encoding: Optional[str] = None,
         *,
-        username: str = None,
+        username: Optional[str] = None,
         minsize: int,
         maxsize: int,
         ssl=None,
         parser=None,
-        create_connection_timeout: float = None,
+        create_connection_timeout: Optional[float] = None,
         connection_cls: Optional[Type[AbcConnection]] = None,
-        loop: asyncio.AbstractEventLoop = None,
-        readonly: bool = None,
+        loop: Optional[asyncio.AbstractEventLoop] = None,
+        readonly: Optional[bool] = None,
+        idle_connection_timeout: Optional[float] = None,
     ):
         if not isinstance(minsize, int) or minsize < 0:
             raise ValueError(f"minsize must be int >= 0 ({minsize!r}, {type(minsize)}")
@@ -56,6 +62,11 @@ class ConnectionsPool(AbcPool):
 
         if minsize > maxsize:
             raise ValueError(f"Invalid pool min/max sizes minsize={minsize}, maxsize={maxsize}")
+
+        if idle_connection_timeout is None:
+            idle_connection_timeout = POOL_IDLE_CONNECTIOM_TIMEOUT
+        elif idle_connection_timeout < 0:
+            raise ValueError("idle_connection_timeout must be >= 0")
 
         self._address = address
         if db is None:
@@ -74,8 +85,9 @@ class ConnectionsPool(AbcPool):
         self._minsize = minsize
         self._maxsize = maxsize
         self._create_connection_timeout = create_connection_timeout
-        self._pool: Deque[AbcConnection] = collections.deque(maxlen=maxsize)
-        self._released: Deque[AbcConnection] = collections.deque(maxlen=maxsize)
+        self._idle_connection_timeout = idle_connection_timeout
+        self._pool: Deque[AbcConnection] = collections.deque(maxlen=max(16, maxsize * 2))
+        self._released: Deque[AbcConnection] = collections.deque(maxlen=max(16, maxsize * 2))
         self._used: Set[AbcConnection] = set()
         self._acquiring = 0
         self._conn_waiters_count = 0
@@ -83,14 +95,22 @@ class ConnectionsPool(AbcPool):
         self._cond = asyncio.Condition(lock=asyncio.Lock())
         self._close_state = CloseEvent(self._do_close)
         self._pubsub_conn: Optional[AbcConnection] = None
+        self._sharded_pubsub_conn: Optional[AbcConnection] = None
         if connection_cls is None:
             connection_cls = RedisConnection
         self._connection_cls = connection_cls
+        self._idle_connections_collect_gen = 1
+        self._idle_connections_collect_task: Optional[asyncio.Task] = None
+        self._loop = asyncio.get_running_loop()
 
     def __repr__(self) -> str:
         pubsub_exists = 0
         if self._pubsub_conn and not self._pubsub_conn.closed:
             pubsub_exists = 1
+
+        sharded_pubsub_exists = 0
+        if self._sharded_pubsub_conn and not self._sharded_pubsub_conn.closed:
+            sharded_pubsub_exists = 1
 
         return (
             f"<{self.__class__.__name__} "
@@ -102,6 +122,7 @@ class ConnectionsPool(AbcPool):
             f"conn_waiters:{self._conn_waiters_count}, "
             f"used:{len(self._used)}, "
             f"pubsub:{pubsub_exists}, "
+            f"sharded_pubsub:{sharded_pubsub_exists}, "
             f"free:{self.freesize}, "
             f"size:{self.size + pubsub_exists}>"
         )
@@ -138,35 +159,6 @@ class ConnectionsPool(AbcPool):
         async with self._cond:
             await self._do_clear()
 
-    async def _do_clear(self):
-        waiters = []
-        while self._pool:
-            conn = self._pool.popleft()
-            conn.close()
-            waiters.append(conn.wait_closed())
-        await asyncio.gather(*waiters)
-
-    async def _do_close(self):
-        if self._release_conn_waiter:
-            await self._release_conn_waiter
-
-        async with self._cond:
-            assert not self._acquiring, self._acquiring
-            waiters: List[asyncio.Future] = []
-            while self._pool:
-                conn = self._pool.popleft()
-                conn.close()
-                waiters.append(conn.wait_closed())
-            for conn in self._used:
-                conn.close()
-                waiters.append(conn.wait_closed())
-            if self._pubsub_conn:
-                self._pubsub_conn.close()
-                waiters.append(self._pubsub_conn.wait_closed())
-                self._pubsub_conn = None
-            await asyncio.gather(*waiters)
-            logger.info("Closed %d connection(s)", len(waiters))
-
     def close(self) -> None:
         """Close all free and in-progress connections and mark pool as closed."""
         if not self._close_state.is_set():
@@ -201,7 +193,7 @@ class ConnectionsPool(AbcPool):
         free connection to execute command.
         """
         command = command.upper().strip()
-        if command in PUBSUB_COMMANDS:
+        if command in PUBSUB_FAMILY_COMMANDS:
             raise ValueError(f"PUB/SUB command {command!r} is prohibited for use with .execute()")
 
         if command in BLOCKING_COMMANDS:
@@ -233,17 +225,13 @@ class ConnectionsPool(AbcPool):
 
         self._check_closed()
 
-        if self._pubsub_conn is None or self._pubsub_conn.closed:
-            async with self._cond:
-                self._check_closed()
-                if self._pubsub_conn and self._pubsub_conn.closed:
-                    closing_conn = self._pubsub_conn
-                    self._pubsub_conn = None
-                    await closing_conn.wait_closed()
-                if self._pubsub_conn is None:
-                    self._pubsub_conn = await self._create_new_connection(self._address)
-
-        res = await self._pubsub_conn.execute_pubsub(command, *channels)
+        if command in PUBSUB_COMMANDS:
+            conn = await self._get_pubsub_connection()
+        elif command in SHARDED_PUBSUB_COMMANDS:
+            conn = await self._get_sharded_pubsub_connection()
+        else:
+            raise ValueError(f"Unknown PUB/SUB command {command!r}")
+        res = await conn.execute_pubsub(command, *channels)
         return res
 
     def get_connection(self, command: TBytesOrStr, args=()):
@@ -255,40 +243,28 @@ class ConnectionsPool(AbcPool):
         #       and not havily used.
 
         command = command.upper().strip()
-        is_pubsub = command in PUBSUB_COMMANDS
-        if is_pubsub:
+        ret_conn: Optional[AbcConnection] = None
+
+        if command in PUBSUB_COMMANDS:
             if self._pubsub_conn and not self._pubsub_conn.closed:
-                return self._pubsub_conn, self._pubsub_conn.address
-            return None, self._address
+                ret_conn = self._pubsub_conn
+        elif command in SHARDED_PUBSUB_COMMANDS:
+            if self._sharded_pubsub_conn and not self._sharded_pubsub_conn.closed:
+                ret_conn = self._sharded_pubsub_conn
+        else:
+            for i in range(self.freesize):
+                conn = self._pool[0]
+                if conn.closed:  # or conn._waiters: (eg: busy connection)
+                    continue
+                if conn.in_pubsub:
+                    continue
+                ret_conn = conn
+                break
 
-        for i in range(self.freesize):
-            conn = self._pool[0]
-            self._pool.rotate(1)
-            if conn.closed:  # or conn._waiters: (eg: busy connection)
-                continue
-            if conn.in_pubsub:
-                continue
-            return conn, conn.address
-        return None, self._address  # figure out
+        if ret_conn:
+            ret_conn.set_last_use_generation(self._idle_connections_collect_gen)
 
-    def _check_result(self, fut, *data):
-        """Hook to check result or catch exception (like MovedError).
-
-        This method can be coroutine.
-        """
-        return fut
-
-    async def _wait_execute(self, address, command, args, kw):
-        """Acquire connection and execute command."""
-        conn = await self.acquire(command, args)
-        try:
-            return await conn.execute(command, *args, **kw)
-        finally:
-            self.release(conn)
-
-    def _check_closed(self) -> None:
-        if self.closed:
-            raise PoolClosedError("Pool is closed")
+        return ret_conn, self._address
 
     async def select(self, db):
         """For cluster implementation this method is unavailable"""
@@ -298,6 +274,7 @@ class ConnectionsPool(AbcPool):
         self._password = password
         async with self._cond:
             for conn in tuple(self._pool):
+                conn.set_last_use_generation(self._idle_connections_collect_gen)
                 await conn.auth(password)
 
     async def auth_with_username(self, username, password) -> None:
@@ -305,6 +282,7 @@ class ConnectionsPool(AbcPool):
         self._password = password
         async with self._cond:
             for conn in tuple(self._pool):
+                conn.set_last_use_generation(self._idle_connections_collect_gen)
                 await conn.auth_with_username(username, password)
 
     @property
@@ -315,19 +293,31 @@ class ConnectionsPool(AbcPool):
         self._readonly = value
         async with self._cond:
             for conn in tuple(self._pool):
+                conn.set_last_use_generation(self._idle_connections_collect_gen)
                 await conn.set_readonly(value)
 
     @property
-    def in_pubsub(self):
+    def in_pubsub(self) -> int:
+        in_pubsub = 0
         if self._pubsub_conn and not self._pubsub_conn.closed:
-            return self._pubsub_conn.in_pubsub
-        return 0
+            in_pubsub += self._pubsub_conn.in_pubsub
+        if self._sharded_pubsub_conn and not self._sharded_pubsub_conn.closed:
+            in_pubsub += self._sharded_pubsub_conn.in_pubsub
+        return in_pubsub
 
     @property
-    def pubsub_channels(self):
+    def pubsub_channels(self) -> Mapping[str, Channel]:
+        channels: Dict[str, Channel] = {}
         if self._pubsub_conn and not self._pubsub_conn.closed:
-            return self._pubsub_conn.pubsub_channels
-        return types.MappingProxyType({})
+            channels.update(self._pubsub_conn.pubsub_channels)
+        return types.MappingProxyType(channels)
+
+    @property
+    def sharded_pubsub_channels(self) -> Mapping[str, Channel]:
+        channels: Dict[str, Channel] = {}
+        if self._sharded_pubsub_conn and not self._sharded_pubsub_conn.closed:
+            channels.update(self._sharded_pubsub_conn.sharded_pubsub_channels)
+        return types.MappingProxyType(channels)
 
     @property
     def pubsub_patterns(self):
@@ -360,6 +350,7 @@ class ConnectionsPool(AbcPool):
                         assert not conn.closed, conn
                         assert conn not in self._used, (conn, self._used)
                         self._used.add(conn)
+                        conn.set_last_use_generation(self._idle_connections_collect_gen)
                         return conn
 
                 self._conn_waiters_count += 1
@@ -377,7 +368,7 @@ class ConnectionsPool(AbcPool):
         When queue of free connections is full the connection will be dropped.
         """
         assert conn in self._used, ("Invalid connection, maybe from other pool", conn)
-        self._released.append(conn)
+        self._released.appendleft(conn)
         if not conn.closed:
             if conn.in_transaction:
                 logger.warning("Connection %r is in transaction, closing it.", conn)
@@ -400,6 +391,25 @@ class ConnectionsPool(AbcPool):
         if self._release_conn_waiter is None:
             self._release_conn_waiter = asyncio.ensure_future(self._wakeup())
 
+    def __enter__(self):
+        raise RuntimeError("'await' should be used as a context manager expression")
+
+    def __exit__(self, *args):
+        pass  # pragma: nocover
+
+    def __await__(self):
+        # To make `with await pool` work
+        conn = yield from self.acquire().__await__()
+        return _ConnectionContextManager(self, conn)
+
+    def get(self):
+        """Return async context manager for working with connection.
+
+        async with pool.get() as conn:
+            await conn.execute('get', 'my-key')
+        """
+        return _AsyncConnectionContextManager(self)
+
     async def _drop_closed(self) -> None:
         close_waiters: Set[asyncio.Future] = set()
         for i in range(self.freesize):
@@ -412,7 +422,12 @@ class ConnectionsPool(AbcPool):
         if close_waiters:
             await asyncio.wait(close_waiters)
 
-    async def _fill_free(self, *, override_min):
+    async def _fill_free(self, *, override_min: bool):
+        if self._idle_connections_collect_task is None and self._idle_connection_timeout > 0:
+            self._idle_connections_collect_task = self._loop.create_task(
+                self._idle_connections_collector()
+            )
+
         # drop closed connections first
         await self._drop_closed()
         while self.size < self.minsize:
@@ -422,7 +437,7 @@ class ConnectionsPool(AbcPool):
                 # check the healthy of that connection, if
                 # something went wrong just trigger the Exception
                 await conn.execute(b"PING")
-                self._pool.append(conn)
+                self._pool.appendleft(conn)
             finally:
                 self._acquiring -= 1
                 # connection may be closed at yield point
@@ -433,7 +448,7 @@ class ConnectionsPool(AbcPool):
                 self._acquiring += 1
                 try:
                     conn = await self._create_new_connection(self._address)
-                    self._pool.append(conn)
+                    self._pool.appendleft(conn)
                 finally:
                     self._acquiring -= 1
                     # connection may be closed at yield point
@@ -463,32 +478,141 @@ class ConnectionsPool(AbcPool):
                 await conn.wait_closed()
                 raise
 
+        conn.set_last_use_generation(self._idle_connections_collect_gen)
+
         return conn
 
     async def _wakeup(self) -> None:
         async with self._cond:
             logger.debug("Released %d connections", len(self._released))
             self._release_conn_waiter = None
-            self._pool.extend(self._released)
+            self._pool.extendleft(self._released)
             self._used.difference_update(self._released)
             self._cond.notify(len(self._released))
             self._released.clear()
 
-    def __enter__(self):
-        raise RuntimeError("'await' should be used as a context manager expression")
+    async def _get_pubsub_connection(self) -> AbcConnection:
+        if self._pubsub_conn is None or self._pubsub_conn.closed:
+            async with self._cond:
+                self._check_closed()
+                if self._pubsub_conn and self._pubsub_conn.closed:
+                    closing_conn = self._pubsub_conn
+                    self._pubsub_conn = None
+                    await closing_conn.wait_closed()
+                if self._pubsub_conn is None:
+                    self._pubsub_conn = await self._create_new_connection(self._address)
+        self._pubsub_conn.set_last_use_generation(self._idle_connections_collect_gen)
+        return self._pubsub_conn
 
-    def __exit__(self, *args):
-        pass  # pragma: nocover
+    async def _get_sharded_pubsub_connection(self) -> AbcConnection:
+        if self._sharded_pubsub_conn is None or self._sharded_pubsub_conn.closed:
+            async with self._cond:
+                self._check_closed()
+                if self._sharded_pubsub_conn and self._sharded_pubsub_conn.closed:
+                    closing_conn = self._sharded_pubsub_conn
+                    self._sharded_pubsub_conn = None
+                    await closing_conn.wait_closed()
+                if self._sharded_pubsub_conn is None:
+                    self._sharded_pubsub_conn = await self._create_new_connection(self._address)
+        self._sharded_pubsub_conn.set_last_use_generation(self._idle_connections_collect_gen)
+        return self._sharded_pubsub_conn
 
-    def __await__(self):
-        # To make `with await pool` work
-        conn = yield from self.acquire().__await__()
-        return _ConnectionContextManager(self, conn)
+    async def _do_clear(self):
+        waiters = []
+        while self._pool:
+            conn = self._pool.pop()
+            conn.close()
+            waiters.append(conn.wait_closed())
+        await asyncio.gather(*waiters, return_exceptions=True)
 
-    def get(self):
-        """Return async context manager for working with connection.
+    async def _do_close(self):
+        if self._release_conn_waiter:
+            await self._release_conn_waiter
 
-        async with pool.get() as conn:
-            await conn.execute('get', 'my-key')
+        if self._idle_connections_collect_task:
+            self._idle_connections_collect_task.cancel()
+            self._idle_connections_collect_task = None
+
+        waiters: List[asyncio.Future] = []
+
+        def close_connection(conn: AbcConnection):
+            conn.close()
+            waiters.append(conn.wait_closed())
+
+        async with self._cond:
+            assert not self._acquiring, self._acquiring
+
+            while self._pool:
+                close_connection(self._pool.pop())
+
+            for conn in self._used:
+                close_connection(conn)
+
+            if self._pubsub_conn:
+                close_connection(self._pubsub_conn)
+                self._pubsub_conn = None
+            if self._sharded_pubsub_conn:
+                close_connection(self._sharded_pubsub_conn)
+                self._sharded_pubsub_conn = None
+
+            await asyncio.gather(*waiters, return_exceptions=True)
+
+            logger.debug("Closed %d connection(s)", len(waiters))
+
+    def _check_result(self, fut, *data):
+        """Hook to check result or catch exception (like MovedError).
+
+        This method can be coroutine.
         """
-        return _AsyncConnectionContextManager(self)
+        return fut
+
+    async def _wait_execute(self, address, command, args, kw):
+        """Acquire connection and execute command."""
+        conn = await self.acquire(command, args)
+        try:
+            return await conn.execute(command, *args, **kw)
+        finally:
+            self.release(conn)
+
+    def _check_closed(self) -> None:
+        if self.closed:
+            raise PoolClosedError("Pool is closed")
+
+    async def _idle_connections_collector(self) -> None:
+        close_waiters: Set[asyncio.Task] = set()
+        while True:
+            await asyncio.sleep(self._idle_connection_timeout)
+            self._idle_connections_collect_gen += 1
+            current_gen = self._idle_connections_collect_gen
+
+            if not self._pool:
+                continue
+
+            async with self._cond:
+                conn_iterator = itertools.chain(
+                    self._pool,
+                    [self._pubsub_conn, self._sharded_pubsub_conn],
+                )
+                for conn in conn_iterator:
+                    if conn is None:
+                        continue
+                    if conn.closed:
+                        continue
+                    if conn._waiters:
+                        continue
+                    if conn.in_pubsub:
+                        continue
+                    if conn.in_transaction:
+                        continue
+
+                    conn_gen = conn.get_last_use_generation()
+                    if conn_gen == 0 or current_gen - conn_gen <= 1:
+                        continue
+
+                    conn.close()
+                    close_waiters.add(asyncio.ensure_future(conn.wait_closed()))
+
+            if close_waiters:
+                await asyncio.wait(close_waiters)
+                logger.debug("Closed %d idle connections to %s", len(close_waiters), self.address)
+                close_waiters = set()

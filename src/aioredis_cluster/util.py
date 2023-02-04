@@ -3,18 +3,33 @@ import random
 import socket
 from asyncio.futures import _chain_future  # type: ignore
 from typing import (
+    Any,
     Dict,
     Generator,
     Iterable,
     List,
+    Optional,
     Sequence,
     Tuple,
-    TypeVar,
     Union,
 )
 
-from aioredis_cluster._aioredis.util import _converters, decode
+from aioredis_cluster._aioredis.util import _converters
 
+try:
+    from aioredis_cluster.speedup.ensure_bytes import (
+        encode_command as cy_encode_command,
+    )
+    from aioredis_cluster.speedup.ensure_bytes import ensure_bytes as cy_ensure_bytes
+    from aioredis_cluster.speedup.ensure_bytes import ensure_str as cy_ensure_str
+    from aioredis_cluster.speedup.ensure_bytes import (
+        iter_ensure_bytes as cy_iter_ensure_bytes,
+    )
+except ImportError:
+    cy_ensure_bytes = None
+    cy_iter_ensure_bytes = None
+    cy_ensure_str = None
+    cy_encode_command = None
 
 __all__ = (
     "ensure_bytes",
@@ -29,34 +44,63 @@ __all__ = (
     "parse_moved_response_error",
     "retry_backoff",
     "unused_port",
+    "encode_command",
 )
 
-_T = TypeVar("_T")
 
-
-def _decode(s, encoding=None):
-    if encoding:
-        return decode(s, encoding)
-    return s
-
-
-def ensure_bytes(obj) -> Union[bytes, bytearray]:
+def py_ensure_bytes(obj) -> Union[bytes, bytearray]:
     obj_type = type(obj)
     if obj_type in _converters:
         return _converters[obj_type](obj)
 
-    return bytes(obj)
+    raise TypeError(f"{obj!r} expected to be of bytearray, bytes, " " float, int, or str type")
 
 
-def iter_ensure_bytes(seq: Iterable) -> Generator[Union[bytes, bytearray], None, None]:
+def py_iter_ensure_bytes(seq: Iterable) -> Generator[Union[bytes, bytearray], None, None]:
     for obj in seq:
-        yield ensure_bytes(obj)
+        yield py_ensure_bytes(obj)
 
 
-def ensure_str(obj) -> str:
+def py_ensure_str(obj) -> str:
     if isinstance(obj, str):
         return obj
     return obj.decode("utf-8")
+
+
+def py_encode_command(*args: Any, buf: Optional[bytearray] = None) -> bytearray:
+    """Encodes arguments into redis bulk-strings array.
+
+    Raises TypeError if any of args not of bytearray, bytes, float, int, or str
+    type.
+    """
+    if buf is None:
+        buf = bytearray()
+    buf.extend(b"*%d\r\n" % len(args))
+    for arg in args:
+        barg = py_ensure_bytes(arg)
+        buf.extend(b"$%d\r\n%s\r\n" % (len(barg), barg))
+    return buf
+
+
+if cy_ensure_bytes:
+    ensure_bytes = cy_ensure_bytes
+else:
+    ensure_bytes = py_ensure_bytes
+
+if cy_iter_ensure_bytes:
+    iter_ensure_bytes = cy_iter_ensure_bytes
+else:
+    iter_ensure_bytes = py_iter_ensure_bytes
+
+if cy_ensure_str:
+    ensure_str = cy_ensure_str
+else:
+    ensure_str = py_ensure_str
+
+if cy_encode_command:
+    encode_command = cy_encode_command
+else:
+    encode_command = py_encode_command
 
 
 def norm_command(command: Union[bytes, str]) -> bytes:

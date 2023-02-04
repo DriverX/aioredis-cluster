@@ -1,6 +1,7 @@
 try:
     from aioredis.errors import (
         AuthError,
+        BusyGroupError,
         ChannelClosedError,
         ConnectionClosedError,
         ConnectionForcedCloseError,
@@ -21,6 +22,7 @@ try:
 except ImportError:
     from .._aioredis.errors import (
         AuthError,
+        BusyGroupError,
         ChannelClosedError,
         ConnectionClosedError,
         ConnectionForcedCloseError,
@@ -42,6 +44,7 @@ except ImportError:
 
 __all__ = (
     "AuthError",
+    "BusyGroupError",
     "ChannelClosedError",
     "ConnectionClosedError",
     "ConnectionForcedCloseError",

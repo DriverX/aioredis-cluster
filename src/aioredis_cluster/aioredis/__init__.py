@@ -23,6 +23,7 @@ except ImportError:
 try:
     from aioredis.errors import (
         AuthError,
+        BusyGroupError,
         ChannelClosedError,
         ConnectionClosedError,
         ConnectionForcedCloseError,
@@ -43,6 +44,7 @@ try:
 except ImportError:
     from .._aioredis.errors import (
         AuthError,
+        BusyGroupError,
         ChannelClosedError,
         ConnectionClosedError,
         ConnectionForcedCloseError,
@@ -76,7 +78,6 @@ except ImportError:
 from .connection import create_connection
 from .pool import create_pool
 
-
 __version__ = "1.3.1"
 
 __all__ = (
@@ -99,6 +100,7 @@ __all__ = (
     "ReplyError",
     "MaxClientsError",
     "AuthError",
+    "BusyGroupError",
     "ProtocolError",
     "PipelineError",
     "MultiExecError",

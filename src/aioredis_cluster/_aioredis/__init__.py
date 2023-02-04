@@ -1,10 +1,4 @@
-from .commands import (
-    GeoMember,
-    GeoPoint,
-    Redis,
-    create_redis,
-    create_redis_pool,
-)
+from .commands import GeoMember, GeoPoint, Redis, create_redis, create_redis_pool
 from .connection import RedisConnection, create_connection
 from .errors import (
     AuthError,
@@ -28,7 +22,6 @@ from .errors import (
 from .pool import ConnectionsPool, create_pool
 from .pubsub import Channel
 from .sentinel import RedisSentinel, create_sentinel
-
 
 __version__ = "1.3.1"
 

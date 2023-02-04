@@ -2,6 +2,7 @@ import dataclasses
 from typing import Any, Dict, List, Optional, Tuple
 
 from .command_info import CommandInfo
+from .command_info.commands import SHARDED_PUBSUB_COMMANDS
 from .structs import Address
 
 
@@ -11,6 +12,7 @@ class ExecuteContext:
         "kwargs",
         "cmd_info",
         "cmd_name",
+        "is_sharded_pubsub",
         "slot",
         "max_attempts",
         "attempt",
@@ -34,7 +36,8 @@ class ExecuteContext:
         self.kwargs = kwargs
         self.cmd_name = cmd_info.name
         self.cmd_info = cmd_info
-        self.slot: Optional[int] = None
+        self.is_sharded_pubsub = self.cmd_name in SHARDED_PUBSUB_COMMANDS
+        self.slot = -1
         self.max_attempts = max_attempts
         self.attempt = 0
         self.start_time = start_time

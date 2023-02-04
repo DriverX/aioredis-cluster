@@ -17,7 +17,6 @@ from ..pool import ConnectionsPool, create_pool
 from ..pubsub import Receiver
 from ..util import CloseEvent
 
-
 # Address marker for discovery
 try:
     from aioredis.sentinel.pool import _NON_DISCOVERED

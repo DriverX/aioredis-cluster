@@ -7,7 +7,6 @@ from aioredis_cluster.command_info import (
 )
 from aioredis_cluster.util import ensure_str
 
-
 registry = default_registry
 
 

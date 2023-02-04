@@ -2,12 +2,7 @@ import asyncio
 import functools
 
 from ..abc import AbcPool
-from ..errors import (
-    ConnectionClosedError,
-    MultiExecError,
-    PipelineError,
-    RedisError,
-)
+from ..errors import ConnectionClosedError, MultiExecError, PipelineError, RedisError
 from ..util import _set_exception, get_event_loop, wait_ok
 
 

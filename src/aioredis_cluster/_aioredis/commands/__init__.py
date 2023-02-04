@@ -17,7 +17,6 @@ from .streams import StreamCommandsMixin
 from .string import StringCommandsMixin
 from .transaction import MultiExec, Pipeline, TransactionsCommandsMixin
 
-
 __all__ = [
     "create_redis",
     "create_redis_pool",

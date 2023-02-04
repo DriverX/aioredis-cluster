@@ -3,7 +3,6 @@ from typing import Awaitable, Callable, Tuple, TypeVar, Union
 from aioredis_cluster.abc import AbcConnection, AbcPool
 from aioredis_cluster.aioredis import Redis
 
-
 TRedis = TypeVar("TRedis", bound=Redis)
 
 BytesOrStr = Union[bytes, str]

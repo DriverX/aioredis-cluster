@@ -10,7 +10,6 @@ from .errors import ChannelClosedError
 from .log import logger
 from .util import _converters  # , _set_result
 
-
 __all__ = [
     "Channel",
     "EndOfStream",

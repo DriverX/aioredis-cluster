@@ -3,7 +3,7 @@ EGG_INFO = src/aioredis_cluster.egg-info
 LINT_FORMAT_PATHS = tests src dev benchmarks
 
 .PHONY: all
-all: black isort flake mypy tests
+all: isort black flake mypy tests
 
 .PHONY: clean
 clean:
@@ -19,7 +19,7 @@ clean:
 .PHONY: devel
 devel:
 	pip install -U pip setuptools
-	pip install -Ue '.[devel,aioredis]'
+	pip install -U -e '.[devel,aioredis]'
 
 .PHONY: flake
 flake:
@@ -89,3 +89,13 @@ endif
 		setuptools
 	$(PYTHON) -m build -swn .
 	ls -l dist/
+
+.PHONY: cythonize
+cythonize:
+	cythonize -3 -b -f -i src/aioredis_cluster/speedup/*.pyx
+
+
+.PHONY: run_cythonize_bench
+run_cythonize_bench:
+	cd benchmarks && python -m cythonize.ensure_bytes
+	cd benchmarks && python -m cythonize.crc

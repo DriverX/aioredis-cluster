@@ -11,7 +11,6 @@ from aioredis_cluster.commands import RedisCluster, conn_is_cluster
 from aioredis_cluster.structs import Address
 from aioredis_cluster.typedef import AioredisAddress, CommandsFactory
 
-
 __all__ = (
     "create_cluster",
     "create_redis_cluster",

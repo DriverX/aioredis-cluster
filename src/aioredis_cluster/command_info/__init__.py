@@ -13,7 +13,6 @@ from .commands import (
     ZUNIONSTORE_COMMANDS,
 )
 
-
 __all__ = (
     "CommandsRegistry",
     "CommandInfo",

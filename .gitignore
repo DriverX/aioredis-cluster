@@ -227,3 +227,6 @@ src/actions_in_fly/version.py
 poetry.lock
 poetry.toml
 .venv
+
+src/aioredis_cluster/speedup/*.so
+src/aioredis_cluster/speedup/*.c

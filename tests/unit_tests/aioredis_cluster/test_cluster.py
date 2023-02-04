@@ -181,6 +181,7 @@ async def test_create_pool(mocker, username):
         maxsize=15,
         create_connection_timeout=1.2,
         ssl=None,
+        idle_connection_timeout=None,
     )
 
 
@@ -219,6 +220,7 @@ async def test_create_pool_by_addr(mocker):
         maxsize=42,
         create_connection_timeout=1.2,
         ssl=None,
+        idle_connection_timeout=None,
     )
 
 

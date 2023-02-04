@@ -1,7 +1,6 @@
 import pytest
 from _testutils import redis_version
 
-
 pytestmark = redis_version(2, 8, 9, reason="HyperLogLog works only with redis>=2.8.9")
 
 

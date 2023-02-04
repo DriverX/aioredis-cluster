@@ -9,7 +9,6 @@ from typing import Counter, Dict, Mapping
 from aioredis_cluster.aioredis import Redis, create_redis_pool
 from aioredis_cluster.pool import ConnectionsPool
 
-
 logger = logging.getLogger(__name__)
 
 

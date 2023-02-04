@@ -1,10 +1,9 @@
 import asyncio
 import ssl
-from typing import List, Tuple, Type, Union
+from typing import List, Optional, Tuple, Type, Union
 
 from .abc import AbcConnection, AbcPool
 from .util import parse_url
-
 
 try:
     from aioredis.pool import ConnectionsPool
@@ -27,6 +26,7 @@ async def create_pool(
     pool_cls: Type[AbcPool] = None,
     connection_cls: Type[AbcConnection] = None,
     loop=None,
+    idle_connection_timeout: Optional[float] = None,
 ):
     # FIXME: rewrite docstring
     """Creates Redis Pool.
@@ -74,6 +74,9 @@ async def create_pool(
 
     if username is not None:
         pool_kw["username"] = username
+
+    if idle_connection_timeout is not None:
+        pool_kw["idle_connection_timeout"] = idle_connection_timeout
 
     pool = cls(
         address,

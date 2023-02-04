@@ -17,7 +17,6 @@ from .errors import (
 from .factory import create_cluster, create_redis_cluster, is_redis_cluster
 from .structs import Address, ClusterNode
 
-
 __all__ = [
     "__version__",
     # Classes

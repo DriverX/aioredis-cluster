@@ -2,7 +2,6 @@ from typing import Tuple, Type, TypeVar, Union
 
 from aioredis_cluster.util import RedirInfo
 
-
 class RedisError(Exception):
     pass
 
