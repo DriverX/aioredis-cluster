@@ -56,9 +56,9 @@ jobs:
     strategy:
       matrix:
         redis-version:
-          - '6.0.12'
-          - '6.2.8'
-          - '7.0.7'
+          - '6.0.17'
+          - '6.2.10'
+          - '7.0.8'
         with_aioredis:
           - 'yes'
           - 'no'
