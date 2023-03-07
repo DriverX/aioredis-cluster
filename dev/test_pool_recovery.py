@@ -9,7 +9,6 @@ from aioredis import Redis, create_pool
 
 from aioredis_cluster.pool import ConnectionsPool
 
-
 logger = logging.getLogger(__name__)
 
 

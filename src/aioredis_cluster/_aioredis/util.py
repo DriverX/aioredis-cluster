@@ -4,7 +4,6 @@ from urllib.parse import parse_qsl, urlparse
 
 from .log import logger
 
-
 try:
     from aioredis.util import _NOTSET
 except ImportError:

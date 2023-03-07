@@ -17,7 +17,6 @@ from aioredis_cluster.structs import Address
 
 from ._cluster_slots import INFO, SLOTS
 
-
 parsed_cluster_info = parse_cluster_info(INFO)
 
 

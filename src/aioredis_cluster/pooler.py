@@ -3,15 +3,14 @@ import dataclasses
 from typing import Dict, List, NamedTuple, Optional, Sequence, Set
 
 from aioredis_cluster.abc import AbcPool
+from aioredis_cluster.connection import close_connections
 from aioredis_cluster.log import logger
+from aioredis_cluster.pool import POOL_IDLE_CONNECTIOM_TIMEOUT
 from aioredis_cluster.resource_lock import ResourceLock
 from aioredis_cluster.structs import Address
 from aioredis_cluster.typedef import PoolCreator, PoolerBatchCallback
 
-
-__all__ = [
-    "Pooler",
-]
+__all__ = ("Pooler",)
 
 
 @dataclasses.dataclass
@@ -23,10 +22,11 @@ class PoolHolder:
 class PubSubChannel(NamedTuple):
     name: bytes
     is_pattern: bool
+    is_sharded: bool
 
 
 class Pooler:
-    REAP_FREQUENCY = 60.0 * 10
+    REAP_FREQUENCY = POOL_IDLE_CONNECTIOM_TIMEOUT
 
     def __init__(
         self,
@@ -45,10 +45,10 @@ class Pooler:
         self._reap_frequency = reap_frequency
         self._reap_calls = 0
 
+        self._loop = asyncio.get_running_loop()
         self._reaper_task = None
         if self._reap_frequency >= 0:
-            loop = asyncio.get_event_loop()
-            self._reaper_task = loop.create_task(self._reaper())
+            self._reaper_task = self._loop.create_task(self._reaper())
 
         self._closed = False
 
@@ -89,7 +89,7 @@ class Pooler:
             collected.append(holder.pool)
 
         if collected:
-            await asyncio.wait([p.wait_closed() for p in collected])
+            await asyncio.wait({asyncio.ensure_future(p.wait_closed()) for p in collected})
             logger.info("%d connections pools was closed", len(collected))
 
     @property
@@ -99,11 +99,18 @@ class Pooler:
     def pools(self) -> List[AbcPool]:
         return [h.pool for h in self._nodes.values()]
 
-    def add_pubsub_channel(self, addr: Address, channel_name: bytes, is_pattern: bool) -> bool:
+    def add_pubsub_channel(
+        self,
+        addr: Address,
+        channel_name: bytes,
+        *,
+        is_pattern: bool = False,
+        is_sharded: bool = False,
+    ) -> bool:
         if addr not in self._pubsub_addrs:
             return False
 
-        channel_obj = PubSubChannel(channel_name, is_pattern)
+        channel_obj = PubSubChannel(channel_name, is_pattern, is_sharded)
         if channel_obj in self._pubsub_channels:
             return False
 
@@ -111,8 +118,14 @@ class Pooler:
         self._pubsub_addrs[addr].add(channel_obj)
         return True
 
-    def remove_pubsub_channel(self, channel_name: bytes, is_pattern: bool) -> bool:
-        channel_obj = PubSubChannel(channel_name, is_pattern)
+    def remove_pubsub_channel(
+        self,
+        channel_name: bytes,
+        *,
+        is_pattern: bool = False,
+        is_sharded: bool = False,
+    ) -> bool:
+        channel_obj = PubSubChannel(channel_name, is_pattern, is_sharded)
         addr = self._pubsub_channels.pop(channel_obj, None)
         if addr:
             if addr in self._pubsub_addrs:
@@ -120,8 +133,14 @@ class Pooler:
             return True
         return False
 
-    def get_pubsub_addr(self, channel_name: bytes, is_pattern: bool) -> Optional[Address]:
-        channel_obj = PubSubChannel(channel_name, is_pattern)
+    def get_pubsub_addr(
+        self,
+        channel_name: bytes,
+        *,
+        is_pattern: bool = False,
+        is_sharded: bool = False,
+    ) -> Optional[Address]:
+        channel_obj = PubSubChannel(channel_name, is_pattern, is_sharded)
         return self._pubsub_channels.get(channel_obj)
 
     async def close(self) -> None:
@@ -142,10 +161,7 @@ class Pooler:
 
         if addrs:
             logger.info("Close connections pools for: %s", addrs)
-            for pool in pools:
-                pool.close()
-
-            await asyncio.wait([pool.wait_closed() for pool in pools])
+            await close_connections(pools)
 
     async def _reap_pools(self) -> List[AbcPool]:
         current_gen = self._reap_calls

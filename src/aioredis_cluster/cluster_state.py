@@ -3,11 +3,15 @@ import datetime
 import enum
 import random
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from aioredis_cluster.errors import ClusterStateError, UncoveredSlotError
 from aioredis_cluster.structs import Address, ClusterNode, ClusterSlot
 
+try:
+    from aioredis_cluster.speedup.crc import find_slot as cy_find_slot
+except ImportError:
+    cy_find_slot = None
 
 __all__ = (
     "NodeClusterState",
@@ -29,6 +33,35 @@ class NodeClusterState(enum.Enum):
     @classmethod
     def _missing_(cls, value: Any) -> "NodeClusterState":
         return cls.UNKNOWN
+
+
+def py_find_slot(slots: Sequence[ClusterSlot], slot: int) -> int:
+    # binary search
+    lo = 0
+    hi = len(slots)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        cl_slot = slots[mid]
+
+        if cl_slot.end < slot:
+            lo = mid + 1
+        else:
+            hi = mid
+
+    if lo >= len(slots):
+        return -1
+
+    cl_slot = slots[lo]
+    if not cl_slot.in_range(slot):
+        return -1
+
+    return lo
+
+
+if cy_find_slot:
+    find_slot = cy_find_slot
+else:
+    find_slot = py_find_slot
 
 
 class _ClusterStateData:
@@ -138,26 +171,10 @@ class ClusterState:
 
     def find_slot(self, slot: int) -> ClusterSlot:
         slots = self._data.slots
-        # binary search
-        lo = 0
-        hi = len(slots)
-        while lo < hi:
-            mid = (lo + hi) // 2
-            cl_slot = slots[mid]
-
-            if cl_slot.end < slot:
-                lo = mid + 1
-            else:
-                hi = mid
-
-        if lo >= len(slots):
+        idx = find_slot(slots, slot)
+        if idx == -1:
             raise UncoveredSlotError(slot)
-
-        cl_slot = slots[lo]
-        if not cl_slot.in_range(slot):
-            raise UncoveredSlotError(slot)
-
-        return cl_slot
+        return slots[idx]
 
     def slot_master(self, slot: int) -> ClusterNode:
         return self.find_slot(slot).master

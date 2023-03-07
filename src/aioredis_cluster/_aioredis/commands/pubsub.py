@@ -28,7 +28,9 @@ class PubSubCommandsMixin:
         """
         conn = self._pool_or_conn
         return wait_return_channels(
-            conn.execute_pubsub(b"SUBSCRIBE", channel, *channels), conn, "pubsub_channels"
+            conn.execute_pubsub(b"SUBSCRIBE", channel, *channels),
+            conn,
+            "pubsub_channels",
         )
 
     def unsubscribe(self, channel, *channels):

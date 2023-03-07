@@ -1,9 +1,10 @@
 import asyncio
 import logging
 import os
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import pytest
+from packaging import version
 
 from aioredis_cluster import create_cluster, create_redis_cluster
 from aioredis_cluster.util import unused_port as _unused_port
@@ -25,11 +26,36 @@ def get_startup_nodes(nodes_str: str) -> List[Union[str, Tuple[str, int]]]:
 
 
 STARTUP_NODES = tuple(get_startup_nodes(os.environ.get("REDIS_CLUSTER_STARTUP_NODES", "").strip()))
+REDIS_VERSION: Optional[version.Version] = None
+if os.environ.get("REDIS_VERSION"):
+    REDIS_VERSION = version.parse(os.environ["REDIS_VERSION"])
+
+
+def pytest_configure(config):
+    # register an additional marker
+    config.addinivalue_line(
+        "markers",
+        ("redis_version: required version of redis by REDIS_VERSION env variable"),
+    )
 
 
 def pytest_runtest_setup(item):
     if not STARTUP_NODES:
         pytest.skip("Environment variable REDIS_CLUSTER_STARTUP_NODES is not defined")
+
+    redis_version_markers = list(item.iter_markers(name="redis_version"))
+    if redis_version_markers:
+        if not REDIS_VERSION:
+            pytest.skip("No REDIS_VERSION env var")
+
+        redis_version_marker = redis_version_markers[0]
+        gte_version = redis_version_marker.kwargs.get("gte")
+        if gte_version and REDIS_VERSION < version.parse(gte_version):
+            pytest.skip(f"REDIS_VERSION ({REDIS_VERSION}) < {gte_version}")
+
+        lt_version = redis_version_marker.kwargs.get("lt")
+        if lt_version and REDIS_VERSION > version.parse(lt_version):
+            pytest.skip(f"REDIS_VERSION ({REDIS_VERSION}) > {lt_version}")
 
 
 def pytest_collection_modifyitems(items):
@@ -45,29 +71,31 @@ def unused_port():
 
 @pytest.fixture
 async def redis_cluster():
-    _client = None
+    _clients = []
     _client_kwargs = None
 
     async def factory(**kwargs):
-        nonlocal _client, _client_kwargs
+        nonlocal _clients, _client_kwargs
         _client_kwargs = kwargs
-        _client = await create_redis_cluster(STARTUP_NODES, **kwargs)
-        return _client
+        client = await create_redis_cluster(STARTUP_NODES, **kwargs)
+        _clients.append(client)
+        return client
 
     yield factory
 
-    if _client:
-        if _client.closed:
-            _client = await factory(**_client_kwargs)
+    if _clients:
+        for _client in _clients:
+            if not _client.closed:
+                try:
+                    for pool in await _client.all_masters():
+                        await pool.flushdb()
 
-        try:
-            for pool in await _client.all_masters():
-                await pool.flushdb()
-
-            _client.close()
-            await _client.wait_closed()
-        except Exception:
-            logging.exception("Unable to cleanup redis cluster nodes")
+                    _client.close()
+                    await _client.wait_closed()
+                except Exception:
+                    logging.exception("Unable to cleanup redis cluster nodes")
+            else:
+                await _client.wait_closed()
 
 
 @pytest.fixture

@@ -1,7 +1,6 @@
 # redis command output (v5.0.8)
 from typing import FrozenSet, Iterable, MutableSet, Union
 
-
 __all__ = (
     "COMMANDS",
     "BLOCKING_COMMANDS",
@@ -11,6 +10,9 @@ __all__ = (
     "XREAD_COMMAND",
     "XREADGROUP_COMMAND",
     "PUBSUB_COMMANDS",
+    "SHARDED_PUBSUB_COMMANDS",
+    "PUBSUB_FAMILY_COMMANDS",
+    "PING_COMMANDS",
 )
 
 
@@ -276,3 +278,14 @@ PUBSUB_COMMANDS = _gen_commands_set(
         "PUNSUBSCRIBE",
     }
 )
+
+SHARDED_PUBSUB_COMMANDS = _gen_commands_set(
+    {
+        "SSUBSCRIBE",
+        "SUNSUBSCRIBE",
+    }
+)
+
+PUBSUB_FAMILY_COMMANDS = PUBSUB_COMMANDS | SHARDED_PUBSUB_COMMANDS
+
+PING_COMMANDS = _gen_commands_set({"PING"})

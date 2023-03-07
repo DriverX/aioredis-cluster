@@ -12,7 +12,7 @@ class ProtocolError(RedisError):
 class ReplyError(RedisError):
     """Raised for redis error replies (-ERR)."""
 
-    MATCH_REPLY = None  # type: Optional[Sequence[str]]
+    MATCH_REPLY: Optional[Sequence[str]] = None
 
     def __new__(cls, msg, *args):
         for klass in cls.__subclasses__():

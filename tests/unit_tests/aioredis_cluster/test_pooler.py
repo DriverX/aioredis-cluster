@@ -196,7 +196,7 @@ async def test_add_pubsub_channel__no_addr():
     pooler = Pooler(mock.AsyncMock(), reap_frequency=-1)
 
     addr = Address("h1", 1234)
-    result = pooler.add_pubsub_channel(addr, b"channel", False)
+    result = pooler.add_pubsub_channel(addr, b"channel", is_pattern=False)
 
     assert result is False
 
@@ -209,20 +209,24 @@ async def test_add_pubsub_channel():
     pooler._pubsub_addrs[addr1] = set()
     pooler._pubsub_addrs[addr2] = set()
 
-    result1 = pooler.add_pubsub_channel(addr1, b"ch1", False)
-    result2 = pooler.add_pubsub_channel(addr1, b"ch1", True)
-    result3 = pooler.add_pubsub_channel(addr1, b"ch2", False)
-    result4 = pooler.add_pubsub_channel(addr2, b"ch3", False)
-    result5 = pooler.add_pubsub_channel(addr1, b"ch3", False)
+    result1 = pooler.add_pubsub_channel(addr1, b"ch1", is_pattern=False)
+    result2 = pooler.add_pubsub_channel(addr1, b"ch1", is_pattern=True)
+    result3 = pooler.add_pubsub_channel(addr1, b"ch2", is_pattern=False)
+    result4 = pooler.add_pubsub_channel(addr2, b"ch3", is_pattern=False)
+    result5 = pooler.add_pubsub_channel(addr1, b"ch3", is_pattern=False)
+    result6 = pooler.add_pubsub_channel(addr1, b"ch3", is_sharded=True)
+    result7 = pooler.add_pubsub_channel(addr1, b"ch3", is_sharded=True)
 
     assert result1 is True
     assert result2 is True
     assert result3 is True
     assert result4 is True
     assert result5 is False
-    assert len(pooler._pubsub_addrs[addr1]) == 3
+    assert result6 is True
+    assert result7 is False
+    assert len(pooler._pubsub_addrs[addr1]) == 4
     assert len(pooler._pubsub_addrs[addr2]) == 1
-    assert len(pooler._pubsub_channels) == 4
+    assert len(pooler._pubsub_channels) == 5
 
     collected_channels = [(ch.name, ch.is_pattern) for ch in pooler._pubsub_channels]
     assert (b"ch1", False) in collected_channels
@@ -234,7 +238,7 @@ async def test_add_pubsub_channel():
 async def test_remove_pubsub_channel__no_addr():
     pooler = Pooler(mock.AsyncMock(), reap_frequency=-1)
 
-    result = pooler.remove_pubsub_channel(b"channel", False)
+    result = pooler.remove_pubsub_channel(b"channel", is_pattern=False)
     assert result is False
 
 
@@ -246,21 +250,24 @@ async def test_remove_pubsub_channel():
     pooler._pubsub_addrs[addr1] = set()
     pooler._pubsub_addrs[addr2] = set()
 
-    pooler.add_pubsub_channel(addr1, b"ch1", False)
-    pooler.add_pubsub_channel(addr1, b"ch2", False)
-    pooler.add_pubsub_channel(addr2, b"ch3", True)
+    pooler.add_pubsub_channel(addr1, b"ch1", is_pattern=False)
+    pooler.add_pubsub_channel(addr1, b"ch2", is_pattern=False)
+    pooler.add_pubsub_channel(addr2, b"ch3", is_pattern=True)
+    pooler.add_pubsub_channel(addr1, b"ch3", is_sharded=True)
 
-    result1 = pooler.remove_pubsub_channel(b"ch1", False)
-    result2 = pooler.remove_pubsub_channel(b"ch1", True)
-    result3 = pooler.remove_pubsub_channel(b"ch2", False)
-    result4 = pooler.remove_pubsub_channel(b"ch3", True)
-    result5 = pooler.remove_pubsub_channel(b"ch3", True)
+    result1 = pooler.remove_pubsub_channel(b"ch1", is_pattern=False)
+    result2 = pooler.remove_pubsub_channel(b"ch1", is_pattern=True)
+    result3 = pooler.remove_pubsub_channel(b"ch2", is_pattern=False)
+    result4 = pooler.remove_pubsub_channel(b"ch3", is_pattern=True)
+    result5 = pooler.remove_pubsub_channel(b"ch3", is_pattern=True)
+    result6 = pooler.remove_pubsub_channel(b"ch3", is_sharded=True)
 
     assert result1 is True
     assert result2 is False
     assert result3 is True
     assert result4 is True
     assert result5 is False
+    assert result6 is True
     assert len(pooler._pubsub_addrs[addr1]) == 0
     assert len(pooler._pubsub_addrs[addr2]) == 0
     assert len(pooler._pubsub_channels) == 0
@@ -274,13 +281,13 @@ async def test_get_pubsub_addr():
     pooler._pubsub_addrs[addr1] = set()
     pooler._pubsub_addrs[addr2] = set()
 
-    pooler.add_pubsub_channel(addr1, b"ch1", False)
-    pooler.add_pubsub_channel(addr2, b"ch2", True)
+    pooler.add_pubsub_channel(addr1, b"ch1", is_pattern=False)
+    pooler.add_pubsub_channel(addr2, b"ch2", is_pattern=True)
 
-    result1 = pooler.get_pubsub_addr(b"ch1", False)
-    result2 = pooler.get_pubsub_addr(b"ch1", True)
-    result3 = pooler.get_pubsub_addr(b"ch2", False)
-    result4 = pooler.get_pubsub_addr(b"ch2", True)
+    result1 = pooler.get_pubsub_addr(b"ch1", is_pattern=False)
+    result2 = pooler.get_pubsub_addr(b"ch1", is_pattern=True)
+    result3 = pooler.get_pubsub_addr(b"ch2", is_pattern=False)
+    result4 = pooler.get_pubsub_addr(b"ch2", is_pattern=True)
 
     assert result1 == addr1
     assert result2 is None
@@ -321,8 +328,8 @@ async def test_reap_pools__cleanup_channels():
     await pooler.ensure_pool(addr1)
     await pooler.ensure_pool(addr2)
 
-    pooler.add_pubsub_channel(addr1, b"ch1", False)
-    pooler.add_pubsub_channel(addr2, b"ch2", False)
+    pooler.add_pubsub_channel(addr1, b"ch1")
+    pooler.add_pubsub_channel(addr2, b"ch2")
 
     # try to reap pools
     reaped = await pooler._reap_pools()

@@ -25,7 +25,6 @@ from aioredis_cluster.log import logger
 from aioredis_cluster.pooler import Pooler
 from aioredis_cluster.structs import Address, ClusterNode, ClusterSlot
 
-
 __all__ = (
     "ClusterManager",
     "create_cluster_state",
@@ -149,7 +148,7 @@ class ClusterManager:
 
         self._reload_count = 0
         self._reload_event = asyncio.Event()
-        self._loop = asyncio.get_event_loop()
+        self._loop = asyncio.get_running_loop()
         self._reloader_task = self._loop.create_task(self._state_reloader())
 
     @property

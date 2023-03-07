@@ -34,22 +34,23 @@ from .util import (
     wait_ok,
 )
 
-
 __all__ = ["create_connection", "RedisConnection"]
 
 MAX_CHUNK_SIZE = 65536
 
-_PUBSUB_COMMANDS = {
-    "SUBSCRIBE",
-    b"SUBSCRIBE",
-    "PSUBSCRIBE",
-    b"PSUBSCRIBE",
-    "UNSUBSCRIBE",
-    b"UNSUBSCRIBE",
-    "PUNSUBSCRIBE",
-    b"PUNSUBSCRIBE",
-}
-_PING_COMMANDS = {"PING", b"PING"}
+_PUBSUB_COMMANDS = frozenset(
+    {
+        "SUBSCRIBE",
+        b"SUBSCRIBE",
+        "PSUBSCRIBE",
+        b"PSUBSCRIBE",
+        "UNSUBSCRIBE",
+        b"UNSUBSCRIBE",
+        "PUNSUBSCRIBE",
+        b"PUNSUBSCRIBE",
+    }
+)
+_PING_COMMANDS = frozenset({"PING", b"PING"})
 
 
 async def create_connection(

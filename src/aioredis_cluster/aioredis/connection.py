@@ -7,7 +7,6 @@ from typing import List, Tuple, Type, Union
 from .abc import AbcConnection
 from .util import parse_url
 
-
 try:
     from aioredis.stream import open_connection, open_unix_connection
 except ImportError:

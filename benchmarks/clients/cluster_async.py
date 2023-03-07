@@ -155,7 +155,7 @@ async def lpop(prefix, client, gather):
             )
     else:
         for i in range(count):
-            await client.lpop("bench:lpush")
+            await client.lpop(f"{prefix}:bench:lpush")
 
 
 @timer
@@ -202,31 +202,33 @@ async def run(prefix, client, gather):
 
 
 async def main(loop, gather=None):
-    arc = aredis.StrictRedisCluster(
-        host=host,
-        port=port,
-        password=password,
-        max_connections=2**31,
-        max_connections_per_node=2**31,
-        readonly=False,
-        reinitialize_steps=count,
-        skip_full_coverage_check=True,
-        decode_responses=False,
-        max_idle_time=count,
-        idle_check_interval=count,
-    )
     now = int(time.time())
-    prefix = f"aredis:{now}"
-    print(f"{loop} {gather} {await warmup(prefix, arc)} aredis")
-    print(await run(prefix, arc, gather=gather))
-    arc.connection_pool.disconnect()
+    # arc = aredis.StrictRedisCluster(
+    #     host=host,
+    #     port=port,
+    #     password=password,
+    #     max_connections=2 ** 31,
+    #     max_connections_per_node=2 ** 31,
+    #     readonly=False,
+    #     reinitialize_steps=10,
+    #     skip_full_coverage_check=True,
+    #     decode_responses=False,
+    #     max_idle_time=count,
+    #     idle_check_interval=count,
+    # )
+
+    # prefix = f"aredis:{now}"
+    # print(f"{loop} {gather} {await warmup(prefix, arc)} aredis")
+    # print(await run(prefix, arc, gather=gather))
+    # arc.connection_pool.disconnect()
 
     aiorc = await aioredis_cluster.create_redis_cluster(
         [(host, port)],
         password=password,
-        state_reload_interval=count,
-        idle_connection_timeout=count,
-        pool_maxsize=2**31,
+        # state_reload_interval=count,
+        # idle_connection_timeout=count,
+        pool_minsize=10,
+        pool_maxsize=10,
     )
     prefix = f"aioredis-cluster:{now}"
     print(f"{loop} {gather} {await warmup(prefix, aiorc)} aioredis-cluster")
@@ -234,24 +236,24 @@ async def main(loop, gather=None):
     aiorc.close()
     await aiorc.wait_closed()
 
-    async with redispy.RedisCluster(
-        host=host,
-        port=port,
-        password=password,
-        reinitialize_steps=count,
-        read_from_replicas=False,
-        decode_responses=False,
-        max_connections=2**31,
-    ) as rca:
-        prefix = f"redispy:{now}"
-        print(f"{loop} {gather} {await warmup(prefix, rca)} redispy")
-        print(await run(prefix, rca, gather=gather))
+    # async with redispy.RedisCluster(
+    #     host=host,
+    #     port=port,
+    #     password=password,
+    #     reinitialize_steps=count,
+    #     read_from_replicas=False,
+    #     decode_responses=False,
+    #     max_connections=2 ** 31,
+    # ) as rca:
+    #     prefix = f"redispy:{now}"
+    #     print(f"{loop} {gather} {await warmup(prefix, rca)} redispy")
+    #     print(await run(prefix, rca, gather=gather))
 
 
 if __name__ == "__main__":
     # host = "localhost"
     # port = 16379
-    host = "redis-cluster62"
+    host = "redis-cluster"
     port = 7000
     password = None
 

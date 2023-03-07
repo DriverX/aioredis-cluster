@@ -27,11 +27,7 @@ from aioredis_cluster.aioredis.errors import (
     ProtocolError,
     ReplyError,
 )
-from aioredis_cluster.command_exec import (
-    ExecuteContext,
-    ExecuteFailProps,
-    ExecuteProps,
-)
+from aioredis_cluster.command_exec import ExecuteContext, ExecuteFailProps, ExecuteProps
 from aioredis_cluster.command_info import CommandInfo, extract_keys
 from aioredis_cluster.commands import RedisCluster
 from aioredis_cluster.crc import key_slot
@@ -59,12 +55,7 @@ from aioredis_cluster.typedef import (
     CommandsFactory,
     PubsubResponse,
 )
-from aioredis_cluster.util import (
-    ensure_bytes,
-    iter_ensure_bytes,
-    retry_backoff,
-)
-
+from aioredis_cluster.util import ensure_bytes, iter_ensure_bytes, retry_backoff
 
 __all__ = (
     "AbcCluster",
@@ -180,6 +171,7 @@ class Cluster(AbcCluster):
         self._pool_cls = pool_cls
         self._pool_ssl = ssl
 
+        self._idle_connection_timeout = idle_connection_timeout
         self._pooler = Pooler(self._create_default_pool, reap_frequency=idle_connection_timeout)
 
         self._manager = ClusterManager(
@@ -190,7 +182,7 @@ class Cluster(AbcCluster):
             execute_timeout=self._attempt_timeout,
         )
 
-        self._loop = asyncio.get_event_loop()
+        self._loop = asyncio.get_running_loop()
         self._closing: Optional[asyncio.Task] = None
         self._closing_event = asyncio.Event()
         self._closed = False
@@ -254,11 +246,14 @@ class Cluster(AbcCluster):
 
         ctx = self._make_exec_context(args, kwargs)
 
+        if len(ctx.cmd) != 2:
+            raise ValueError("Only one channel supported in cluster mode")
+
         # get first pattern and calculate slot
         channel_name = ctx.cmd[1]
         is_pattern = ctx.cmd_name in {"PSUBSCRIBE", "PUNSUBSCRIBE"}
-        is_unsubscribe = ctx.cmd_name in {"UNSUBSCRIBE", "PUNSUBSCRIBE"}
-        ctx.slot = key_slot(channel_name)
+        is_unsubscribe = ctx.cmd_name in {"UNSUBSCRIBE", "PUNSUBSCRIBE", "SUNSUBSCRIBE"}
+        ctx.slot = self.determine_slot(channel_name)
 
         exec_fail_props: Optional[ExecuteFailProps] = None
 
@@ -267,47 +262,62 @@ class Cluster(AbcCluster):
             self._check_closed()
 
             ctx.attempt += 1
-            exec_fail_props = None
 
             state = await self._manager.get_state()
 
-            node_addr = self._pooler.get_pubsub_addr(channel_name, is_pattern)
+            if exec_fail_props is None:
+                ready_node_addr = self._pooler.get_pubsub_addr(
+                    channel_name,
+                    is_pattern=is_pattern,
+                    is_sharded=ctx.is_sharded_pubsub,
+                )
+                # if unsuscribe command and no node found for pattern
+                # probably pubsub connection is already close
+                if is_unsubscribe and ready_node_addr is None:
+                    result = [[ctx.cmd[0], channel_name, 0]]
+                    break
 
-            # if unsuscribe command and no node found for pattern
-            # probably pubsub connection is already close
-            if is_unsubscribe and node_addr is None:
-                result = [[ctx.cmd[0], channel_name, 0]]
-                break
+            exec_props = self._make_execute_props(
+                state,
+                ctx,
+                exec_fail_props,
+                ready_node_addr=ready_node_addr,
+            )
+            ready_node_addr = None
 
-            if node_addr is None:
-                try:
-                    node_addr = state.random_slot_node(ctx.slot).addr
-                except UncoveredSlotError:
-                    logger.warning("No any node found by slot %d", ctx.slot)
-                    node_addr = state.random_node().addr
+            if exec_props.reload_state_required:
+                self._manager.require_reload_state()
 
+            exec_fail_props = None
             try:
-                pool = await self._pooler.ensure_pool(node_addr)
+                pool = await self._pooler.ensure_pool(exec_props.node_addr)
 
                 async with atimeout(self._attempt_timeout):
                     result = await pool.execute_pubsub(*ctx.cmd, **ctx.kwargs)
-
-                if is_unsubscribe:
-                    self._pooler.remove_pubsub_channel(channel_name, is_pattern)
-                else:
-                    self._pooler.add_pubsub_channel(node_addr, channel_name, is_pattern)
-
             except asyncio.CancelledError:
                 raise
             except Exception as e:
                 exec_fail_props = ExecuteFailProps(
-                    node_addr=node_addr,
+                    node_addr=exec_props.node_addr,
                     error=e,
                 )
 
             if exec_fail_props:
+                if is_unsubscribe:
+                    self._pooler.remove_pubsub_channel(
+                        channel_name,
+                        is_pattern=is_pattern,
+                        is_sharded=ctx.is_sharded_pubsub,
+                    )
                 await self._on_execute_fail(ctx, exec_fail_props)
                 continue
+
+            self._pooler.add_pubsub_channel(
+                exec_props.node_addr,
+                channel_name,
+                is_pattern=is_pattern,
+                is_sharded=ctx.is_sharded_pubsub,
+            )
 
             break
 
@@ -359,7 +369,17 @@ class Cluster(AbcCluster):
     def pubsub_channels(self) -> Mapping[str, AbcChannel]:
         """Read-only channels dict."""
 
-        return MappingProxyType(ChainMap(*(p.pubsub_channels for p in self._pooler.pools())))
+        chain_map = ChainMap(*(p.pubsub_channels for p in self._pooler.pools()))
+        return MappingProxyType(chain_map)
+
+    @property
+    def sharded_pubsub_channels(self) -> Mapping[str, AbcChannel]:
+        """Read-only channels dict."""
+
+        chain_map = ChainMap(
+            *(p.sharded_pubsub_channels for p in self._pooler.pools()),  # type: ignore
+        )
+        return MappingProxyType(chain_map)
 
     @property
     def pubsub_patterns(self) -> Mapping[str, AbcChannel]:
@@ -445,7 +465,7 @@ class Cluster(AbcCluster):
 
         return pools
 
-    async def keys_master(self, key: AnyStr, *keys: AnyStr) -> Redis:
+    async def keys_master(self, key: AnyStr, *keys: AnyStr) -> RedisCluster:
         self._check_closed()
 
         slot = self.determine_slot(ensure_bytes(key), *iter_ensure_bytes(keys))
@@ -504,7 +524,7 @@ class Cluster(AbcCluster):
         *,
         minsize: int = None,
         maxsize: int = None,
-    ) -> Redis:
+    ) -> RedisCluster:
         state = await self._manager.get_state()
         if state.has_addr(addr) is False:
             raise ValueError(f"Unknown node address {addr}")
@@ -577,7 +597,9 @@ class Cluster(AbcCluster):
         self,
         state: ClusterState,
         ctx: ExecuteContext,
-        fail_props: ExecuteFailProps = None,
+        fail_props: Optional[ExecuteFailProps] = None,
+        *,
+        ready_node_addr: Optional[Address] = None,
     ) -> ExecuteProps:
         exec_props = ExecuteProps()
 
@@ -588,7 +610,7 @@ class Cluster(AbcCluster):
             # instead of many isinstance conditions
             exc = fail_props.error
             if isinstance(exc, self._connection_errors):
-                if ctx.attempt <= 2 and ctx.slot is not None:
+                if ctx.attempt <= 2 and ctx.slot != -1:
                     replica = state.random_slot_replica(ctx.slot)
                     if replica is not None:
                         node_addr = replica.addr
@@ -618,7 +640,9 @@ class Cluster(AbcCluster):
                 )
 
         else:
-            if ctx.slot is not None:
+            if ready_node_addr is not None:
+                node_addr = ready_node_addr
+            elif ctx.slot != -1:
                 try:
                     node = state.slot_master(ctx.slot)
                 except UncoveredSlotError:
@@ -774,6 +798,7 @@ class Cluster(AbcCluster):
             maxsize=self._pool_maxsize,
             create_connection_timeout=self._connect_timeout,
             ssl=self._pool_ssl,
+            idle_connection_timeout=self._idle_connection_timeout,
         )
 
         pool = await create_pool(addr, **{**default_opts, **opts})

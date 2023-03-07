@@ -1,6 +1,5 @@
 import random
 import ssl
-import warnings
 from typing import Any, List, Optional, Sequence, Union
 
 from aioredis_cluster import aioredis
@@ -10,7 +9,6 @@ from aioredis_cluster.cluster import Cluster
 from aioredis_cluster.commands import RedisCluster, conn_is_cluster
 from aioredis_cluster.structs import Address
 from aioredis_cluster.typedef import AioredisAddress, CommandsFactory
-
 
 __all__ = (
     "create_cluster",
@@ -27,7 +25,6 @@ async def create_cluster(
     max_attempts: int = None,
     attempt_timeout: float = None,
     # manager options
-    state_reload_frequency: float = None,
     state_reload_interval: float = None,
     follow_cluster: bool = None,
     # pool options
@@ -54,12 +51,6 @@ async def create_cluster(
     # for distribute initial load to cluster
     if len(corrected_nodes) > 1:
         random.shuffle(corrected_nodes)
-
-    if state_reload_frequency is not None:
-        warnings.warn(
-            "`state_reload_frequency` is deprecated and is no affect anything",
-            DeprecationWarning,
-        )
 
     cluster = Cluster(
         corrected_nodes,

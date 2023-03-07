@@ -16,11 +16,10 @@ jobs:
     strategy:
       matrix:
         python-version:
-          - '3.6'
-          - '3.7'
           - '3.8'
           - '3.9'
           - '3.10'
+          - '3.11'
         with_aioredis:
           - 'yes'
           - 'no'
@@ -57,16 +56,17 @@ jobs:
     strategy:
       matrix:
         redis-version:
-          - '5.0.9'
-          - '6.0.12'
-          - '6.2.1'
+          - '6.0.17'
+          - '6.2.10'
+          - '7.0.8'
         with_aioredis:
           - 'yes'
           - 'no'
 
     services:
       redis:
-        image: grokzen/redis-cluster:${{ matrix.redis-version }}
+        # image: grokzen/redis-cluster:${{ matrix.redis-version }}
+        image: driverx88/redis-cluster:${{ matrix.redis-version }}
         ports:
           - 7000-7007:7000-7007
 
@@ -77,7 +77,7 @@ jobs:
         with:
           python-version: 3.8
       - name: 'Install dependencies (aioredis: ${{ matrix.with_aioredis }})'
-        run: |
+        run: |-
           python -m pip install -U pip setuptools
           if [ "${{ matrix.with_aioredis }}" == "yes" ]; then
             python -m pip install -Ue '.[devel,aioredis]';
@@ -85,10 +85,11 @@ jobs:
             python -m pip install -Ue '.[devel]'
           fi
       - name: Test with pytest and redis(v${{ matrix.redis-version }})
-        run: |
+        run: |-
           pytest tests/system_tests
         env:
           REDIS_CLUSTER_STARTUP_NODES: 'redis://localhost:7000'
+          REDIS_VERSION: '${{ matrix.redis-version }}'
 
   aioredis_tests_need_run:
     runs-on: ubuntu-latest

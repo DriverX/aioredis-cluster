@@ -8,7 +8,6 @@ from _testutils import redis_version
 from aioredis_cluster._aioredis.commands.streams import parse_messages
 from aioredis_cluster._aioredis.errors import BusyGroupError
 
-
 pytestmark = redis_version(5, 0, 0, reason="Streams only available since Redis 5.0.0")
 
 

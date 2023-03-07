@@ -10,9 +10,8 @@ Many implementation features were inspired by [go-redis](https://github.com/go-r
 Requirements
 ------------
 
-* [Python](https://www.python.org) 3.6.5+
+* [Python](https://www.python.org) 3.8+
 * [async_timeout](https://pypi.org/project/async_timeout/)
-* [dataclasses](https://pypi.org/project/dataclasses/) (only for Python 3.6)
 
 Features
 --------

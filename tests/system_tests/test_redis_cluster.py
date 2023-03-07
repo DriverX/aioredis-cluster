@@ -2,7 +2,8 @@ import asyncio
 
 import pytest
 
-from aioredis_cluster import RedisClusterError
+from aioredis_cluster import RedisCluster, RedisClusterError
+from aioredis_cluster.aioredis import Channel
 from aioredis_cluster.commands.commands import _blocked_methods
 
 
@@ -138,3 +139,68 @@ async def test_blocking_commands(redis_cluster):
 
     assert b1_result == [b"blpop_key2{slot}", b"1"]
     assert b2_result == [b"blpop_key1{slot}", b"2"]
+
+
+@pytest.mark.redis_version(gte="7.0.0")
+async def test_sharded_pubsub(redis_cluster):
+    cl1: RedisCluster = await redis_cluster()
+    cl2: RedisCluster = await redis_cluster()
+
+    channels = await cl1.ssubscribe("channel1")
+    assert len(channels) == 1
+    assert isinstance(channels[0], Channel) is True
+    ch1: Channel = channels[0]
+
+    channels = await cl1.ssubscribe("channel2")
+    assert len(channels) == 1
+    ch2: Channel = channels[0]
+
+    assert len(cl1.sharded_pubsub_channels) == 2
+    assert cl1.in_pubsub == 2
+    assert len(cl1.channels) == 0
+    assert len(cl1.patterns) == 0
+
+    await cl2.spublish("channel1", "hello")
+    await cl2.spublish("channel2", "world")
+
+    msg1 = await ch1.get()
+    assert msg1 == b"hello"
+
+    msg2 = await ch2.get()
+    assert msg2 == b"world"
+
+    await cl1.sunsubscribe("channel1")
+    await cl1.sunsubscribe("channel2")
+
+    assert len(cl1.sharded_pubsub_channels) == 0
+    assert cl1.in_pubsub == 0
+
+
+@pytest.mark.redis_version(gte="7.0.0")
+async def test_sharded_pubsub__multiple_subscribe(redis_cluster):
+    cl1: RedisCluster = await redis_cluster()
+    cl2: RedisCluster = await redis_cluster()
+
+    ch1: Channel = (await cl1.ssubscribe("channel:{shard_key}:1"))[0]
+    ch2: Channel = (await cl1.ssubscribe("channel:{shard_key}:2"))[0]
+    ch3: Channel = (await cl1.ssubscribe("channel:{shard_key}:3"))[0]
+
+    assert len(cl1.sharded_pubsub_channels) == 3
+    assert cl1.in_pubsub == 3
+
+    shard_pool = await cl1.keys_master("{shard_key}")
+    assert len(shard_pool.sharded_pubsub_channels) == 3
+
+    await cl2.spublish("channel:{shard_key}:1", "msg1")
+    await cl2.spublish("channel:{shard_key}:2", "msg2")
+    await cl2.spublish("channel:{shard_key}:3", "msg3")
+    await cl2.spublish("channel:{shard_key}:4", "msg4")
+
+    msg1 = await ch1.get()
+    assert msg1 == b"msg1"
+
+    msg2 = await ch2.get()
+    assert msg2 == b"msg2"
+
+    msg3 = await ch3.get()
+    assert msg3 == b"msg3"

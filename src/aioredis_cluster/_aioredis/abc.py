@@ -5,7 +5,6 @@ These are intended to be used for implementing custom connection managers.
 import abc
 from typing import AsyncContextManager
 
-
 __all__ = [
     "AbcConnection",
     "AbcPool",

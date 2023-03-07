@@ -10,7 +10,6 @@ from aioredis_cluster._aioredis.abc import AbcPool
 from aioredis_cluster._aioredis.errors import AuthError, MasterReplyError
 from aioredis_cluster._aioredis.sentinel.commands import RedisSentinel
 
-
 pytestmark = redis_version(2, 8, 12, reason="Sentinel v2 required")
 if sys.platform == "win32":
     pytestmark = pytest.mark.skip(reason="unstable on windows")

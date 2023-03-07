@@ -2,7 +2,6 @@ from collections import namedtuple
 
 from ..util import _NOTSET, wait_convert
 
-
 GeoPoint = namedtuple("GeoPoint", ("longitude", "latitude"))
 GeoMember = namedtuple("GeoMember", ("member", "dist", "hash", "coord"))
 

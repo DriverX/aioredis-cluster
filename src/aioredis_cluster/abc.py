@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import AnyStr, AsyncContextManager, List, Sequence, Union
+from typing import AnyStr, AsyncContextManager, List, Mapping, Sequence, Union
 
 from aioredis_cluster.aioredis import Redis
 from aioredis_cluster.aioredis.abc import AbcChannel
@@ -7,7 +7,6 @@ from aioredis_cluster.aioredis.abc import AbcConnection as _AbcConnection
 from aioredis_cluster.aioredis.abc import AbcPool as _AbcPool
 from aioredis_cluster.cluster_state import ClusterState
 from aioredis_cluster.structs import Address, ClusterNode
-
 
 __all__ = [
     "AbcConnection",
@@ -55,6 +54,12 @@ class AbcCluster(_AbcConnection):
     def extract_keys(self, command_seq: Sequence[BytesOrStr]) -> List[bytes]:
         pass
 
+    @property
+    @abstractmethod
+    def sharded_pubsub_channels(self) -> Mapping[str, AbcChannel]:
+        """Read-only channels dict."""
+        pass
+
 
 class AbcConnection(_AbcConnection):
     @property
@@ -68,6 +73,22 @@ class AbcConnection(_AbcConnection):
 
     @abstractmethod
     async def auth_with_username(self, username: str, password: str) -> bool:
+        pass
+
+    @property
+    @abstractmethod
+    def sharded_pubsub_channels(self) -> Mapping[str, AbcChannel]:
+        """Read-only channels dict."""
+        pass
+
+    @abstractmethod
+    def get_last_use_generation(self) -> int:
+        """Last use generation number for idle connection detection for pool"""
+        pass
+
+    @abstractmethod
+    def set_last_use_generation(self, gen: int):
+        """Set last use generation number for this connection"""
         pass
 
 
@@ -107,4 +128,10 @@ class AbcPool(_AbcPool):
 
     @abstractmethod
     async def auth_with_username(self, username: str, password: str) -> None:
+        pass
+
+    @property
+    @abstractmethod
+    def sharded_pubsub_channels(self) -> Mapping[str, AbcChannel]:
+        """Read-only channels dict."""
         pass

@@ -6,7 +6,6 @@ from aioredis_cluster.aioredis.errors import (
 )
 from aioredis_cluster.util import parse_moved_response_error
 
-
 __all__ = [
     "ConnectTimeoutError",
     "RedisClusterError",
@@ -99,5 +98,5 @@ class LoadingError(ReplyError):
     MATCH_REPLY = ("LOADING ",)
 
 
-network_errors = (ConnectionError, OSError, ConnectTimeoutError)
+network_errors = (ConnectionError, ConnectTimeoutError)
 closed_errors = (ConnectionClosedError, PoolClosedError)

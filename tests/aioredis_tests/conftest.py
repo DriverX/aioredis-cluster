@@ -18,7 +18,6 @@ from async_timeout import timeout as async_timeout
 from aioredis_cluster import _aioredis as aioredis
 from aioredis_cluster._aioredis import sentinel as aioredis_sentinel
 
-
 TCPAddress = namedtuple("TCPAddress", "host port")
 
 RedisServer = namedtuple("RedisServer", "name tcp_address unixsocket version password")

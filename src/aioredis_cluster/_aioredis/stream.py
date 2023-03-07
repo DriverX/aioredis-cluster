@@ -4,7 +4,6 @@ import warnings
 
 from .util import get_event_loop
 
-
 __all__ = [
     "open_connection",
     "open_unix_connection",

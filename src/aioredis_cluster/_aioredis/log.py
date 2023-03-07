@@ -2,7 +2,6 @@ import logging
 import os
 import sys
 
-
 logger = logging.getLogger("aioredis_cluster.aioredis")
 sentinel_logger = logger.getChild("sentinel")
 

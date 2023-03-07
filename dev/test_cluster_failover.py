@@ -7,14 +7,12 @@ import signal
 from collections import deque
 from typing import Counter, Deque, Dict, Mapping, Optional, Set
 
-
 try:
     from aioredis import Channel, Redis
 except ImportError:
     from aioredis_cluster.aioredis import Redis, Channel
 
 from aioredis_cluster import RedisCluster, create_redis_cluster
-
 
 logger = logging.getLogger(__name__)
 
