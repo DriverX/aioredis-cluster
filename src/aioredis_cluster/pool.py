@@ -2,6 +2,7 @@ import asyncio
 import collections
 import itertools
 import logging
+import random
 import types
 from typing import Deque, Dict, List, Mapping, Optional, Set, Tuple, Type, Union
 
@@ -586,7 +587,9 @@ class ConnectionsPool(AbcPool):
             raise PoolClosedError("Pool is closed")
 
     async def _idle_connections_collect_wait(self) -> None:
-        await asyncio.sleep(self._idle_connection_timeout)
+        time_split = self._idle_connection_timeout / 4
+        jitter_time = random.uniform(0, time_split)
+        await asyncio.sleep(time_split * 3 + jitter_time)
 
     async def _idle_connections_collector(self) -> None:
         close_waiters: Set[asyncio.Task] = set()
