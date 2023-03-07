@@ -100,6 +100,7 @@ class ConnectionsPool(AbcPool):
             connection_cls = RedisConnection
         self._connection_cls = connection_cls
         self._idle_connections_collect_gen = 1
+        self._idle_connections_collect_running = False
         self._idle_connections_collect_task: Optional[asyncio.Task] = None
         self._loop = asyncio.get_running_loop()
 
@@ -423,11 +424,6 @@ class ConnectionsPool(AbcPool):
             await asyncio.wait(close_waiters)
 
     async def _fill_free(self, *, override_min: bool):
-        if self._idle_connections_collect_task is None and self._idle_connection_timeout > 0:
-            self._idle_connections_collect_task = self._loop.create_task(
-                self._idle_connections_collector()
-            )
-
         # drop closed connections first
         await self._drop_closed()
         while self.size < self.minsize:
@@ -455,6 +451,11 @@ class ConnectionsPool(AbcPool):
                     await self._drop_closed()
 
     async def _create_new_connection(self, address) -> AbcConnection:
+        if self._idle_connections_collect_task is None and self._idle_connection_timeout > 0:
+            self._idle_connections_collect_task = self._loop.create_task(
+                self._idle_connections_collector()
+            )
+
         try:
             conn: AbcConnection = await create_connection(
                 address,
@@ -486,6 +487,8 @@ class ConnectionsPool(AbcPool):
         async with self._cond:
             logger.debug("Released %d connections", len(self._released))
             self._release_conn_waiter = None
+            for conn in self._released:
+                conn.set_last_use_generation(self._idle_connections_collect_gen)
             self._pool.extendleft(self._released)
             self._used.difference_update(self._released)
             self._cond.notify(len(self._released))
@@ -530,8 +533,12 @@ class ConnectionsPool(AbcPool):
             await self._release_conn_waiter
 
         if self._idle_connections_collect_task:
-            self._idle_connections_collect_task.cancel()
+            collect_task = self._idle_connections_collect_task
             self._idle_connections_collect_task = None
+            if self._idle_connections_collect_running:
+                await asyncio.wait([collect_task])
+            else:
+                collect_task.cancel()
 
         waiters: List[asyncio.Future] = []
 
@@ -578,11 +585,16 @@ class ConnectionsPool(AbcPool):
         if self.closed:
             raise PoolClosedError("Pool is closed")
 
+    async def _idle_connections_collect_wait(self) -> None:
+        await asyncio.sleep(self._idle_connection_timeout)
+
     async def _idle_connections_collector(self) -> None:
         close_waiters: Set[asyncio.Task] = set()
-        while True:
-            await asyncio.sleep(self._idle_connection_timeout)
+        while not self.closed:
+            self._idle_connections_collect_running = False
+            await self._idle_connections_collect_wait()
             self._idle_connections_collect_gen += 1
+            self._idle_connections_collect_running + True
             current_gen = self._idle_connections_collect_gen
 
             if not self._pool:

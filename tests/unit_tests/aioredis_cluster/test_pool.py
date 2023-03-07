@@ -7,6 +7,11 @@ import pytest
 from aioredis_cluster.pool import ConnectionsPool
 
 
+async def moment_10():
+    for i in range(10):
+        await asyncio.sleep(0)
+
+
 def create_conn_mock():
     conn = mock.NonCallableMock()
     conn.closed = False
@@ -16,6 +21,24 @@ def create_conn_mock():
     conn.readonly = False
     conn.db = 0
     conn.execute = mock.AsyncMock(return_value=b"OK")
+    conn.wait_closed = mock.AsyncMock(return_value=None)
+
+    def close_se():
+        conn.closed = True
+
+    conn.close.side_effect = close_se
+
+    conn._last_use_generation = 0
+
+    def set_last_use_generation_se(gen: int):
+        conn._last_use_generation = gen
+
+    def get_last_use_generation_se() -> int:
+        return conn._last_use_generation
+
+    conn.set_last_use_generation.side_effect = set_last_use_generation_se
+    conn.get_last_use_generation.side_effect = get_last_use_generation_se
+
     return conn
 
 
@@ -153,3 +176,156 @@ async def test_acquire__release_multiple_connections_at_time(mocker):
     assert conn_waiters[5].result() is acquired_conn3
 
     mocked_create_new_connection.await_count == 3
+
+
+async def test_idle_connections_detection__initialize(mocker):
+    addr = ("127.0.0.1", 6379)
+
+    conn_mocks = [
+        create_conn_mock(),
+        create_conn_mock(),
+        create_conn_mock(),
+    ]
+
+    mocked_create_connection = mocker.patch(
+        ConnectionsPool.__module__ + ".create_connection",
+        new=mock.AsyncMock(side_effect=conn_mocks),
+    )
+
+    pool = ConnectionsPool(addr, minsize=1, maxsize=3)
+    await pool._fill_free(override_min=False)
+
+    assert pool._idle_connections_collect_gen == 1
+    mocked_create_connection.assert_awaited_once()
+    conn_mocks[0].set_last_use_generation.assert_called_once_with(1)
+    conn_mocks[1].set_last_use_generation.assert_not_called()
+    conn_mocks[2].set_last_use_generation.assert_not_called()
+
+
+async def test_idle_connections_detection__connection_mark(mocker):
+    addr = ("127.0.0.1", 6379)
+
+    conn_mocks = [
+        create_conn_mock(),
+        create_conn_mock(),
+        create_conn_mock(),
+    ]
+
+    mocker.patch(
+        ConnectionsPool.__module__ + ".create_connection",
+        new=mock.AsyncMock(side_effect=conn_mocks),
+    )
+
+    pool = ConnectionsPool(addr, minsize=1, maxsize=3)
+
+    collect_event = asyncio.Event()
+
+    async def collect_wait():
+        await collect_event.wait()
+
+    mocked_idle_connections_collect_wait = mocker.patch.object(
+        pool,
+        "_idle_connections_collect_wait",
+        side_effect=collect_wait,
+    )
+
+    assert pool._idle_connections_collect_gen == 1
+
+    conn1 = await pool.acquire()
+    assert pool._idle_connections_collect_task is not None
+    await asyncio.sleep(0)
+
+    conn2 = await pool.acquire()
+
+    collect_event.set()
+    collect_event.clear()
+    await asyncio.sleep(0)
+    assert mocked_idle_connections_collect_wait.await_count == 2
+    assert pool._idle_connections_collect_gen == 2
+
+    conn3 = await pool.acquire()
+
+    assert conn1._last_use_generation == 1
+    assert conn2._last_use_generation == 1
+    assert conn3._last_use_generation == 2
+
+    pool.release(conn1)
+    pool.release(conn2)
+    pool.release(conn3)
+
+    await asyncio.sleep(0)
+
+    assert conn1._last_use_generation == 2
+    assert conn2._last_use_generation == 2
+    assert conn3._last_use_generation == 2
+
+
+async def test_idle_connections_detection__collect(mocker):
+    addr = ("127.0.0.1", 6379)
+
+    conn_mocks = [
+        create_conn_mock(),
+        create_conn_mock(),
+        create_conn_mock(),
+    ]
+
+    mocked_create_connection = mocker.patch(
+        ConnectionsPool.__module__ + ".create_connection",
+        new=mock.AsyncMock(side_effect=conn_mocks),
+    )
+
+    pool = ConnectionsPool(addr, minsize=1, maxsize=3)
+    assert pool._idle_connections_collect_gen == 1
+
+    collect_event = asyncio.Event()
+
+    async def collect_wait():
+        await collect_event.wait()
+
+    mocker.patch.object(
+        pool,
+        "_idle_connections_collect_wait",
+        side_effect=collect_wait,
+    )
+
+    await pool._fill_free(override_min=False)
+    conn1 = await pool.acquire()
+    conn2 = await pool.acquire()
+    pool.release(conn1)
+    pool.release(conn2)
+    await moment_10()
+    assert pool.freesize == 2
+
+    # collect gen 2, nothing to close
+    collect_event.set()
+    collect_event.clear()
+    await moment_10()
+    assert pool._idle_connections_collect_gen == 2
+
+    # collect gen 3, close 1 connection
+    collect_event.set()
+    collect_event.clear()
+    await moment_10()
+    assert pool._idle_connections_collect_gen == 3
+
+    conn_mocks[0].close.assert_called_once_with()
+    conn_mocks[0].wait_closed.assert_awaited_once_with()
+    conn_mocks[1].close.assert_called_once_with()
+    conn_mocks[1].wait_closed.assert_awaited_once_with()
+
+    # collect gen 4, nothing to close
+    collect_event.set()
+    collect_event.clear()
+    await moment_10()
+    assert pool._idle_connections_collect_gen == 4
+
+    conn3 = await pool.acquire()
+    pool.release(conn3)
+    await moment_10()
+
+    assert pool.freesize == 1
+    assert mocked_create_connection.await_count == 3
+    assert conn_mocks[0]._last_use_generation == 1
+    assert conn_mocks[1]._last_use_generation == 1
+    assert conn_mocks[2]._last_use_generation == 4
+    assert pool._idle_connections_collect_gen == 4
