@@ -98,5 +98,5 @@ class LoadingError(ReplyError):
     MATCH_REPLY = ("LOADING ",)
 
 
-network_errors = (ConnectionError, OSError, ConnectTimeoutError)
+network_errors = (ConnectionError, ConnectTimeoutError)
 closed_errors = (ConnectionClosedError, PoolClosedError)

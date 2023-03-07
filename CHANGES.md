@@ -7,8 +7,10 @@ Changes
 * add support [Sharded PUB/SUB](https://redis.io/docs/manual/pubsub/#sharded-pubsub)
 * new methods and properties `spublish`, `ssubscribe`, `sunsubscribe`, `pubsub_shardchannels`, `pubsub_shardnumsub`, `sharded_pubsub_channels`
 * drop support for Python 3.6 and 3.7
+* add support fot Python 3.11
 * changed acquire connection behaviour from connection pool. Now connection acquire and release to pool by LIFO way for better idle connection detection
 * idle connections detection in connections pool
+* deprecated `state_reload_frequency` option from `create_cluster` factory was removed
 
 2.3.1 (2022-07-29)
 ------------------

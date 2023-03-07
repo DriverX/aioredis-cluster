@@ -1,5 +1,3 @@
-import warnings
-
 import mock
 import pytest
 
@@ -71,7 +69,6 @@ async def test_create_cluster__parametrized(mocker, cluster_fix):
         retry_max_delay=2.3,
         max_attempts=8,
         attempt_timeout=5.5,
-        state_reload_frequency=7.8,
         state_reload_interval=8.7,
         follow_cluster=True,
         idle_connection_timeout=1.1,
@@ -106,23 +103,23 @@ async def test_create_cluster__parametrized(mocker, cluster_fix):
     )
 
 
-async def test_create_cluster__warnings(mocker, cluster_fix):
-    cluster = cluster_fix()
-    mocker.patch(
-        create_cluster.__module__ + ".Cluster",
-        return_value=cluster,
-    )
+# async def test_create_cluster__warnings(mocker, cluster_fix):
+#     cluster = cluster_fix()
+#     mocker.patch(
+#         create_cluster.__module__ + ".Cluster",
+#         return_value=cluster,
+#     )
 
-    with warnings.catch_warnings(record=True) as ws:
-        await create_cluster(
-            ("redis://redis1?db=1",),
-            state_reload_frequency=7.8,
-        )
+#     with warnings.catch_warnings(record=True) as ws:
+#         await create_cluster(
+#             ("redis://redis1?db=1",),
+#             state_reload_frequency=7.8,
+#         )
 
-    assert len(ws) >= 1
-    found_warnings = [w for w in ws if "state_reload_frequency" in str(w.message)]
-    assert len(found_warnings) == 1
-    assert issubclass(found_warnings[0].category, DeprecationWarning)
+#     assert len(ws) >= 1
+#     found_warnings = [w for w in ws if "state_reload_frequency" in str(w.message)]
+#     assert len(found_warnings) == 1
+#     assert issubclass(found_warnings[0].category, DeprecationWarning)
 
 
 async def test_create_redis_cluster(mocker, cluster_fix):

@@ -615,7 +615,7 @@ async def test_execute__retriable_error_in_unexpected_call(mocker):
     [
         (ConnectionError(), Address("random_replica", 6379), 1),
         (ConnectionRefusedError(), Address("random_replica", 6379), 1),
-        (OSError(), Address("random_replica", 6379), 1),
+        (ConnectionResetError(), Address("random_replica", 6379), 1),
         (ConnectTimeoutError(object()), Address("random_replica", 6379), 1),
         (ClusterDownError("CLUSTERDOWN clusterdown"), Address("random", 6379), 1),
         (TryAgainError("TRYAGAIN tryagain"), Address("master", 6379), 0),
@@ -704,7 +704,7 @@ async def test_keys_master__with_retries_but_success(mocker):
         LoadingError("LOADING loading"),
         ProtocolError(),
         ClusterDownError("CLUSTERDOWN cluster is down"),
-        OSError("socket problem"),
+        ConnectionAbortedError("socket problem"),
     ]
     errors_iter = iter(errors)
 
@@ -761,7 +761,7 @@ async def test_all_masters__with_error_after_retries(mocker):
     pool = mocked_pooler.ensure_pool.return_value
 
     pools_returns = [
-        OSError(),
+        ConnectionResetError(),
         pool,
         ConnectionError(),
         pool,
@@ -798,7 +798,7 @@ async def test_execute__with_attempt_timeout__non_idempotent(mocker, event_loop)
 
     mocked_pooler = mocker.patch.object(cl, "_pooler", new=get_pooler_mock())
     pool = mocked_pooler._pool
-    pool.execute = mock.Mock(return_value=event_loop.create_future())
+    pool.execute = mock.Mock(side_effect=lambda *a, **kw: event_loop.create_future())
 
     mocked_manager = mocker.patch.object(cl, "_manager", new=get_manager_mock())
     state = mocked_manager.get_state.return_value

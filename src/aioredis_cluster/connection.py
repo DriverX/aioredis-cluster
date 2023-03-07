@@ -2,7 +2,7 @@ import asyncio
 import logging
 from functools import partial
 from types import MappingProxyType
-from typing import List, Mapping
+from typing import Iterable, List, Mapping
 
 from aioredis_cluster._aioredis.util import coerced_keys_dict, wait_ok
 from aioredis_cluster.abc import AbcChannel, AbcConnection
@@ -15,9 +15,19 @@ from aioredis_cluster.command_info.commands import (
     PUBSUB_FAMILY_COMMANDS,
     SHARDED_PUBSUB_COMMANDS,
 )
+from aioredis_cluster.typedef import PClosableConnection
 from aioredis_cluster.util import encode_command
 
 logger = logging.getLogger(__name__)
+
+
+async def close_connections(conns: Iterable[PClosableConnection]) -> None:
+    close_waiters = set()
+    for conn in conns:
+        conn.close()
+        close_waiters.add(asyncio.ensure_future(conn.wait_closed()))
+    if close_waiters:
+        await asyncio.wait(close_waiters)
 
 
 class RedisConnection(BaseConnection, AbcConnection):

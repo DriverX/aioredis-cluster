@@ -3,6 +3,7 @@ import dataclasses
 from typing import Dict, List, NamedTuple, Optional, Sequence, Set
 
 from aioredis_cluster.abc import AbcPool
+from aioredis_cluster.connection import close_connections
 from aioredis_cluster.log import logger
 from aioredis_cluster.pool import POOL_IDLE_CONNECTIOM_TIMEOUT
 from aioredis_cluster.resource_lock import ResourceLock
@@ -44,10 +45,10 @@ class Pooler:
         self._reap_frequency = reap_frequency
         self._reap_calls = 0
 
+        self._loop = asyncio.get_running_loop()
         self._reaper_task = None
         if self._reap_frequency >= 0:
-            loop = asyncio.get_running_loop()
-            self._reaper_task = loop.create_task(self._reaper())
+            self._reaper_task = self._loop.create_task(self._reaper())
 
         self._closed = False
 
@@ -88,7 +89,7 @@ class Pooler:
             collected.append(holder.pool)
 
         if collected:
-            await asyncio.wait([p.wait_closed() for p in collected])
+            await asyncio.wait({asyncio.ensure_future(p.wait_closed()) for p in collected})
             logger.info("%d connections pools was closed", len(collected))
 
     @property
@@ -160,10 +161,7 @@ class Pooler:
 
         if addrs:
             logger.info("Close connections pools for: %s", addrs)
-            for pool in pools:
-                pool.close()
-
-            await asyncio.wait([pool.wait_closed() for pool in pools])
+            await close_connections(pools)
 
     async def _reap_pools(self) -> List[AbcPool]:
         current_gen = self._reap_calls
