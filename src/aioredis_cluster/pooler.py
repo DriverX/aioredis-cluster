@@ -1,16 +1,19 @@
 import asyncio
 import dataclasses
+import logging
 from typing import Dict, List, NamedTuple, Optional, Sequence, Set
 
 from aioredis_cluster.abc import AbcPool
 from aioredis_cluster.connection import close_connections
-from aioredis_cluster.log import logger
 from aioredis_cluster.pool import POOL_IDLE_CONNECTIOM_TIMEOUT
 from aioredis_cluster.resource_lock import ResourceLock
 from aioredis_cluster.structs import Address
 from aioredis_cluster.typedef import PoolCreator, PoolerBatchCallback
 
 __all__ = ("Pooler",)
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass
@@ -189,7 +192,7 @@ class Pooler:
                 except BaseException as e:
                     logger.error("Unexpected error while pool closing: %r", e)
 
-            logger.info("%d idle connections pools reaped", len(collected))
+            logger.debug("Closed %d idle connections pools", len(collected))
 
         return collected
 

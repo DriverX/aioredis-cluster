@@ -44,7 +44,6 @@ from aioredis_cluster.errors import (
     closed_errors,
     network_errors,
 )
-from aioredis_cluster.log import logger
 from aioredis_cluster.manager import ClusterManager, ClusterState
 from aioredis_cluster.pool import ConnectionsPool
 from aioredis_cluster.pooler import Pooler
@@ -61,6 +60,9 @@ __all__ = (
     "AbcCluster",
     "Cluster",
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class Cluster(AbcCluster):
@@ -201,8 +203,6 @@ class Cluster(AbcCluster):
         keys = self._extract_command_keys(ctx.cmd_info, ctx.cmd)
         if keys:
             ctx.slot = self.determine_slot(*keys)
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.debug("Determined slot for %r is %d", ctx.cmd_for_repr(), ctx.slot)
 
         exec_fail_props: Optional[ExecuteFailProps] = None
 
@@ -634,7 +634,9 @@ class Cluster(AbcCluster):
 
             if node_addr != fail_props.node_addr:
                 logger.info(
-                    "Change node to execute: %s->%s",
+                    "Change node to execute %s on slot %s: %s->%s",
+                    ctx.cmd_name,
+                    ctx.slot,
                     fail_props.node_addr,
                     node_addr,
                 )
@@ -655,7 +657,15 @@ class Cluster(AbcCluster):
                 node_addr = node.addr
             else:
                 node_addr = state.random_master().addr
-            logger.debug("Defined node to command: %s", node_addr)
+
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    "Command %s properties: slot=%s, node=%s, repr=%r",
+                    ctx.cmd_name,
+                    ctx.slot,
+                    node_addr,
+                    ctx.cmd_for_repr(),
+                )
 
         exec_props.node_addr = node_addr
 
@@ -671,12 +681,18 @@ class Cluster(AbcCluster):
             attempt_log_prefix = f"[{ctx.attempt}/{ctx.max_attempts}] "
 
         if logger.isEnabledFor(logging.DEBUG):
-            logger.debug("%sExecute %r on %s", attempt_log_prefix, ctx.cmd_for_repr(), node_addr)
+            logger.debug(
+                "%sExecute %r on %s (slot:%s)",
+                attempt_log_prefix,
+                ctx.cmd_for_repr(),
+                node_addr,
+                ctx.slot,
+            )
 
         pool = await self._pooler.ensure_pool(node_addr)
 
         if props.asking:
-            logger.info("Send ASKING to %s for command %r", node_addr, ctx.cmd_name)
+            logger.debug("Send ASKING to %s for command %r", node_addr, ctx.cmd_name)
 
             result = await self._conn_execute(
                 pool,

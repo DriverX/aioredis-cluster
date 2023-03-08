@@ -21,7 +21,6 @@ from aioredis_cluster.command_info import (
     default_registry,
 )
 from aioredis_cluster.errors import RedisError, network_errors
-from aioredis_cluster.log import logger
 from aioredis_cluster.pooler import Pooler
 from aioredis_cluster.structs import Address, ClusterNode, ClusterSlot
 
@@ -29,6 +28,9 @@ __all__ = (
     "ClusterManager",
     "create_cluster_state",
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 SlotsResponse = List[List]
