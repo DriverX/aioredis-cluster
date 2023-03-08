@@ -1,7 +1,7 @@
 Changes
 =======
 
-2.4.0 (2023-03-XX)
+2.4.0 (2023-03-08)
 ------------------
 
 * add support [Sharded PUB/SUB](https://redis.io/docs/manual/pubsub/#sharded-pubsub)
