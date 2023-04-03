@@ -431,9 +431,6 @@ class ConnectionsPool(AbcPool):
             self._acquiring += 1
             try:
                 conn = await self._create_new_connection(self._address)
-                # check the healthy of that connection, if
-                # something went wrong just trigger the Exception
-                await conn.execute(b"PING")
                 self._pool.appendleft(conn)
             finally:
                 self._acquiring -= 1
@@ -450,6 +447,14 @@ class ConnectionsPool(AbcPool):
                     self._acquiring -= 1
                     # connection may be closed at yield point
                     await self._drop_closed()
+
+    async def _connection_post_init(self, conn: AbcConnection) -> None:
+        # check the healthy of that connection, if
+        # something went wrong just trigger the Exception
+        await conn.execute(b"PING")
+
+        if self._readonly:
+            await conn.set_readonly(self._readonly)
 
     async def _create_new_connection(self, address) -> AbcConnection:
         if self._idle_connections_collect_task is None and self._idle_connection_timeout > 0:
@@ -468,17 +473,10 @@ class ConnectionsPool(AbcPool):
                 parser=self._parser_class,
                 timeout=self._create_connection_timeout,
                 connection_cls=self._connection_cls,
+                post_init=self._connection_post_init,
             )
         except asyncio.TimeoutError:
             raise ConnectTimeoutError(address)
-
-        if self._readonly:
-            try:
-                await conn.set_readonly(self._readonly)
-            except (asyncio.CancelledError, Exception):
-                conn.close()
-                await conn.wait_closed()
-                raise
 
         conn.set_last_use_generation(self._idle_connections_collect_gen)
 

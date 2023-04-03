@@ -2,7 +2,9 @@ import asyncio
 import logging
 import socket
 import ssl
-from typing import List, Tuple, Type, Union
+from typing import Awaitable, Callable, List, Optional, Tuple, Type, Union
+
+from async_timeout import timeout as atimeout
 
 from .abc import AbcConnection
 from .util import parse_url
@@ -23,15 +25,15 @@ logger = logging.getLogger(__name__)
 async def create_connection(
     address: Union[str, Tuple[str, int], List],
     *,
-    db: int = None,
-    username: str = None,
-    password: str = None,
-    ssl: Union[bool, ssl.SSLContext] = None,
-    encoding: str = None,
+    db: Optional[int] = None,
+    username: Optional[str] = None,
+    password: Optional[str] = None,
+    ssl: Optional[Union[bool, ssl.SSLContext]] = None,
+    encoding: Optional[str] = None,
     parser=None,
-    timeout: float = None,
-    connection_cls: Type[AbcConnection] = None,
-    loop=None,
+    timeout: Optional[float] = None,
+    connection_cls: Optional[Type[AbcConnection]] = None,
+    post_init: Optional[Callable[[AbcConnection], Awaitable]] = None,
 ) -> AbcConnection:
     """Creates redis connection.
 
@@ -87,38 +89,47 @@ async def create_connection(
     else:
         cls = RedisConnection
 
-    if isinstance(address, (list, tuple)):
-        host, port = address
-        logger.debug("Creating tcp connection to %r", address)
-        reader, writer = await asyncio.wait_for(
-            open_connection(host, port, limit=MAX_CHUNK_SIZE, ssl=ssl), timeout
-        )
-        sock = writer.transport.get_extra_info("socket")
-        if sock is not None:
-            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-            address = sock.getpeername()
-        address = tuple(address[:2])  # type: ignore
-    else:
-        logger.debug("Creating unix connection to %r", address)
-        reader, writer = await asyncio.wait_for(
-            open_unix_connection(address, ssl=ssl, limit=MAX_CHUNK_SIZE), timeout
-        )
-        sock = writer.transport.get_extra_info("socket")
-        if sock is not None:
-            address = sock.getpeername()
+    loop = asyncio.get_running_loop()
+    tail_timeout = timeout
+
+    start_t = loop.time()
+    async with atimeout(timeout):
+        if isinstance(address, (list, tuple)):
+            host, port = address
+            logger.debug("Creating tcp connection to %r", address)
+            reader, writer = await open_connection(host, port, limit=MAX_CHUNK_SIZE, ssl=ssl)
+            sock = writer.transport.get_extra_info("socket")
+            if sock is not None:
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                address = sock.getpeername()
+            address = tuple(address[:2])  # type: ignore
+        else:
+            logger.debug("Creating unix connection to %r", address)
+            reader, writer = await open_unix_connection(address, ssl=ssl, limit=MAX_CHUNK_SIZE)
+            sock = writer.transport.get_extra_info("socket")
+            if sock is not None:
+                address = sock.getpeername()
 
     conn = cls(reader, writer, encoding=encoding, address=address, parser=parser)
+    if tail_timeout is not None:
+        tail_timeout = max(0, tail_timeout - (loop.time() - start_t))
 
     try:
-        if password is not None:
-            if username is not None:
-                await conn.auth_with_username(username, password)
-            else:
-                await conn.auth(password)
-        if db is not None:
-            await conn.select(db)
+        async with atimeout(tail_timeout):
+            if password is not None:
+                if username is not None:
+                    await conn.auth_with_username(username, password)
+                else:
+                    await conn.auth(password)
+
+            if db is not None:
+                await conn.select(db)
+
+            if post_init is not None:
+                await post_init(conn)
     except (asyncio.CancelledError, Exception):
         conn.close()
         await conn.wait_closed()
         raise
+
     return conn
