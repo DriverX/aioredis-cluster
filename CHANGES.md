@@ -1,6 +1,14 @@
 Changes
 =======
 
+2.5.0 (2023-04-03)
+------------------
+
+* improve connection creation timeout
+* do not lose connection in Pool while execute PING probe
+* respect Pool.minsize in idle connections detector
+* shuffle startup nodes for obtain cluster state
+
 2.4.0 (2023-03-08)
 ------------------
 
