@@ -53,7 +53,7 @@ async def routine_work(redis: Redis, routine_id: int, counters: Counter[str]) ->
         # if random.random() >= 0.5:
         if True or routine_id % 2 == 0:
             pool = await redis.keys_master(key)
-            with (await pool) as redis_conn:
+            with await pool as redis_conn:
                 count = await redis_conn.incr(key)
         else:
             count = await redis.incr(key)
@@ -177,7 +177,7 @@ async def other_routine(
     while True:
         try:
             pool = await redis.keys_master(key)
-            with (await pool) as conn:
+            with await pool as conn:
                 await asyncio.sleep(random.random())
                 counters["local_count"] += 1
                 await conn.incr(key)

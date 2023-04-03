@@ -18,6 +18,6 @@ async def test_ssl_pool(create_pool, server, ssl_proxy):
     ssl_port, ssl_ctx = ssl_proxy(server.tcp_address.port)
 
     pool = await create_pool(("localhost", ssl_port), ssl=ssl_ctx)
-    with (await pool) as conn:
+    with await pool as conn:
         res = await conn.execute("PING")
         assert res == b"PONG"

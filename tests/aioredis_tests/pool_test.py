@@ -38,14 +38,12 @@ async def test_clear(pool):
 
 @pytest.mark.parametrize("minsize", [None, -100, 0.0, 100])
 async def test_minsize(minsize, create_pool, server):
-
     with pytest.raises(AssertionError):
         await create_pool(server.tcp_address, minsize=minsize, maxsize=10)
 
 
 @pytest.mark.parametrize("maxsize", [None, -100, 0.0, 1])
 async def test_maxsize(maxsize, create_pool, server):
-
     with pytest.raises(AssertionError):
         await create_pool(server.tcp_address, minsize=2, maxsize=maxsize)
 
@@ -75,7 +73,7 @@ def test_no_yield_from(pool):
 async def test_simple_command(create_pool, server):
     pool = await create_pool(server.tcp_address, minsize=10)
 
-    with (await pool) as conn:
+    with await pool as conn:
         msg = await conn.execute("echo", "hello")
         assert msg == b"hello"
         assert pool.size == 10
@@ -90,11 +88,11 @@ async def test_create_new(create_pool, server):
     assert pool.size == 1
     assert pool.freesize == 1
 
-    with (await pool):
+    with await pool:
         assert pool.size == 1
         assert pool.freesize == 0
 
-        with (await pool):
+        with await pool:
             assert pool.size == 2
             assert pool.freesize == 0
 
@@ -108,7 +106,7 @@ async def test_create_constraints(create_pool, server):
     assert pool.size == 1
     assert pool.freesize == 1
 
-    with (await pool):
+    with await pool:
         assert pool.size == 1
         assert pool.freesize == 0
 
@@ -121,7 +119,7 @@ async def test_create_no_minsize(create_pool, server):
     assert pool.size == 0
     assert pool.freesize == 0
 
-    with (await pool):
+    with await pool:
         assert pool.size == 1
         assert pool.freesize == 0
 
@@ -151,7 +149,7 @@ async def test_release_closed(create_pool, server):
     assert pool.size == 1
     assert pool.freesize == 1
 
-    with (await pool) as conn:
+    with await pool as conn:
         conn.close()
         await conn.wait_closed()
     await asyncio.sleep(0)
@@ -166,7 +164,7 @@ async def test_release_pending(create_pool, server, caplog):
 
     caplog.clear()
     with caplog.at_level("WARNING", "aioredis_cluster.aioredis"):
-        with (await pool) as conn:
+        with await pool as conn:
             try:
                 await asyncio.wait_for(
                     conn.execute(b"blpop", b"somekey:not:exists", b"0"),
@@ -202,7 +200,7 @@ async def test_select_db(create_pool, server):
     pool = await create_pool(server.tcp_address)
 
     await pool.select(1)
-    with (await pool) as conn:
+    with await pool as conn:
         assert conn.db == 1
 
 
@@ -211,13 +209,13 @@ async def test_change_db(create_pool, server):
     assert pool.size == 1
     assert pool.freesize == 1
 
-    with (await pool) as conn:
+    with await pool as conn:
         await conn.select(1)
     await asyncio.sleep(0)
     assert pool.size == 0
     assert pool.freesize == 0
 
-    with (await pool):
+    with await pool:
         assert pool.size == 1
         assert pool.freesize == 0
 
@@ -238,7 +236,7 @@ async def test_change_db_errors(create_pool, server):
         await pool.select(None)
     assert pool.db == 0
 
-    with (await pool):
+    with await pool:
         pass
     await asyncio.sleep(0)
     assert pool.size == 1
@@ -284,9 +282,9 @@ async def test_response_decoding(create_pool, server):
     pool = await create_pool(server.tcp_address, encoding="utf-8")
 
     assert pool.encoding == "utf-8"
-    with (await pool) as conn:
+    with await pool as conn:
         await conn.execute("set", "key", "value")
-    with (await pool) as conn:
+    with await pool as conn:
         res = await conn.execute("get", "key")
         assert res == "value"
 
@@ -295,11 +293,11 @@ async def test_hgetall_response_decoding(create_pool, server):
     pool = await create_pool(server.tcp_address, encoding="utf-8")
 
     assert pool.encoding == "utf-8"
-    with (await pool) as conn:
+    with await pool as conn:
         await conn.execute("del", "key1")
         await conn.execute("hmset", "key1", "foo", "bar")
         await conn.execute("hmset", "key1", "baz", "zap")
-    with (await pool) as conn:
+    with await pool as conn:
         res = await conn.execute("hgetall", "key1")
         assert res == ["foo", "bar", "baz", "zap"]
 
@@ -307,12 +305,12 @@ async def test_hgetall_response_decoding(create_pool, server):
 async def test_crappy_multiexec(create_pool, server):
     pool = await create_pool(server.tcp_address, encoding="utf-8", minsize=1, maxsize=1)
 
-    with (await pool) as conn:
+    with await pool as conn:
         await conn.execute("set", "abc", "def")
         await conn.execute("multi")
         await conn.execute("set", "abc", "fgh")
     assert conn.closed is True
-    with (await pool) as conn:
+    with await pool as conn:
         value = await conn.execute("get", "abc")
     assert value == "def"
 
@@ -324,14 +322,14 @@ async def test_pool_size_growth(create_pool, server):
     tasks = []
 
     async def task1(i):
-        with (await pool):
+        with await pool:
             assert pool.size <= pool.maxsize
             assert pool.freesize == 0
             await asyncio.sleep(0.2)
             done.add(i)
 
     async def task2():
-        with (await pool):
+        with await pool:
             assert pool.size <= pool.maxsize
             assert pool.freesize >= 0
             assert done == {0, 1}
@@ -349,7 +347,7 @@ async def test_pool_with_closed_connections(create_pool, server):
     conn1.close()
     assert conn1.closed is True
     assert 1 == pool.freesize
-    with (await pool) as conn2:
+    with await pool as conn2:
         assert conn2.closed is False
         assert conn1 is not conn2
 
@@ -359,7 +357,7 @@ async def test_pool_close(create_pool, server):
 
     assert pool.closed is False
 
-    with (await pool) as conn:
+    with await pool as conn:
         assert (await conn.execute("ping")) == b"PONG"
 
     pool.close()
@@ -367,7 +365,7 @@ async def test_pool_close(create_pool, server):
     assert pool.closed is True
 
     with pytest.raises(PoolClosedError):
-        with (await pool) as conn:
+        with await pool as conn:
             assert (await conn.execute("ping")) == b"PONG"
 
 
@@ -376,7 +374,7 @@ async def test_pool_close__used(create_pool, server):
 
     assert pool.closed is False
 
-    with (await pool) as conn:
+    with await pool as conn:
         pool.close()
         await pool.wait_closed()
         assert pool.closed is True
@@ -484,7 +482,7 @@ async def test_pool_idle_close(create_pool, start_server, caplog):
 async def test_await(create_pool, server):
     pool = await create_pool(server.tcp_address, minsize=10)
 
-    with (await pool) as conn:
+    with await pool as conn:
         msg = await conn.execute("echo", "hello")
         assert msg == b"hello"
 

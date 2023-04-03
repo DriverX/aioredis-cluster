@@ -40,7 +40,6 @@ async def test_connect_inject_connection_cls(request, create_connection, server)
 
 
 async def test_connect_inject_connection_cls_invalid(request, create_connection, server):
-
     with pytest.raises(AssertionError):
         await create_connection(server.tcp_address, connection_cls=type)
 

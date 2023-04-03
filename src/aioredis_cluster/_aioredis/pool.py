@@ -483,7 +483,6 @@ class ConnectionsPool(AbcPool):
 
 
 class _ConnectionContextManager:
-
     __slots__ = ("_pool", "_conn")
 
     def __init__(self, pool, conn):
@@ -502,7 +501,6 @@ class _ConnectionContextManager:
 
 
 class _AsyncConnectionContextManager:
-
     __slots__ = ("_pool", "_conn")
 
     def __init__(self, pool):

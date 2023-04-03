@@ -27,7 +27,7 @@ async def routine(routine_id: int, redis: Redis) -> None:
     while True:
         try:
             async with async_timeout.timeout(5.0):
-                with (await redis) as redis_conn:
+                with await redis as redis_conn:
                     count = await redis_conn.incr("counter")
                     local_count += 1
                     if local_count > 0 and local_count % 1000 == 0:
@@ -62,7 +62,7 @@ async def conn_acquirer(acquirer_id: int, redis: Redis):
     while True:
         try:
             async with async_timeout.timeout(None):
-                with (await redis) as redis_conn:
+                with await redis as redis_conn:
                     count += 1
                     logger.info("%d: %d acquired conn", acquirer_id, count)
                     await redis_conn.incr("counter")
@@ -93,7 +93,6 @@ async def async_main() -> None:
     )
     redis = Redis(redis_pool)
     try:
-
         # acquirer_tasks = [
         #     loop.create_task(conn_acquirer(i, redis))
         #     for i in range(20)

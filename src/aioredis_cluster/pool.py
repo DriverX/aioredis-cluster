@@ -1,6 +1,5 @@
 import asyncio
 import collections
-import itertools
 import logging
 import random
 import types
@@ -590,6 +589,21 @@ class ConnectionsPool(AbcPool):
         await asyncio.sleep(time_split * 3 + jitter_time)
 
     async def _idle_connections_collector(self) -> None:
+        def is_need_close(current_gen: int, conn: AbcConnection) -> bool:
+            if conn.closed:
+                return True
+            if conn._waiters:
+                return False
+            if conn.in_pubsub:
+                return False
+            if conn.in_transaction:
+                return False
+
+            conn_gen = conn.get_last_use_generation()
+            if conn_gen == 0 or current_gen - conn_gen <= 1:
+                return False
+            return True
+
         close_waiters: Set[asyncio.Task] = set()
         while not self.closed:
             self._idle_connections_collect_running = False
@@ -602,28 +616,21 @@ class ConnectionsPool(AbcPool):
                 continue
 
             async with self._cond:
-                conn_iterator = itertools.chain(
-                    self._pool,
-                    [self._pubsub_conn, self._sharded_pubsub_conn],
-                )
-                for conn in conn_iterator:
+                pool_size = len(self._pool)
+                for conn in self._pool:
+                    if pool_size <= self._minsize:
+                        break
+                    if is_need_close(current_gen, conn):
+                        conn.close()
+                        close_waiters.add(asyncio.ensure_future(conn.wait_closed()))
+                        pool_size -= 1
+
+                if conn in (self._pubsub_conn, self._sharded_pubsub_conn):
                     if conn is None:
                         continue
-                    if conn.closed:
-                        continue
-                    if conn._waiters:
-                        continue
-                    if conn.in_pubsub:
-                        continue
-                    if conn.in_transaction:
-                        continue
-
-                    conn_gen = conn.get_last_use_generation()
-                    if conn_gen == 0 or current_gen - conn_gen <= 1:
-                        continue
-
-                    conn.close()
-                    close_waiters.add(asyncio.ensure_future(conn.wait_closed()))
+                    if is_need_close(current_gen, conn):
+                        conn.close()
+                        close_waiters.add(asyncio.ensure_future(conn.wait_closed()))
 
             if close_waiters:
                 await asyncio.wait(close_waiters)
