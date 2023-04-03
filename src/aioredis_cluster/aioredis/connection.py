@@ -93,7 +93,7 @@ async def create_connection(
     tail_timeout = timeout
 
     start_t = loop.time()
-    async with atimeout(timeout):
+    async with atimeout(tail_timeout):
         if isinstance(address, (list, tuple)):
             host, port = address
             logger.debug("Creating tcp connection to %r", address)
