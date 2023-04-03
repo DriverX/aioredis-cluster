@@ -41,7 +41,7 @@ async def keys_routine(
 
         try:
             await asyncio.sleep(0 if random.random() >= 0.5 else 0.001)
-            with (await redis) as conn:
+            with await redis as conn:
                 await conn.incr(key)
                 await conn.get(key)
                 await asyncio.sleep(random.random())

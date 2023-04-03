@@ -135,7 +135,6 @@ class Channel(AbcChannel):
 
 
 class _IterHelper:
-
     __slots__ = ("_ch", "_is_active", "_args", "_kw")
 
     def __init__(self, ch, is_active, *args, **kw):

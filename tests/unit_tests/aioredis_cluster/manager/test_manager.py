@@ -153,11 +153,10 @@ async def test_load_state(mocker, pooler_mock):
     assert result is mocked_state
     assert result is manager._state
     assert manager._commands is mocked_create_registry.return_value
-    mocked_fetch_state.assert_called_once_with(
-        ["addr1", "addr2"],
-        1,
-        None,
-    )
+    assert mocked_fetch_state.call_count == 1
+    fetch_state_call = mocked_fetch_state.call_args
+    assert sorted(fetch_state_call[0][0]) == ["addr1", "addr2"]
+    assert fetch_state_call == mock.call(mock.ANY, 1, None)
     mocked_create_registry.assert_called_once_with(
         pooler.ensure_pool.return_value.execute.return_value
     )

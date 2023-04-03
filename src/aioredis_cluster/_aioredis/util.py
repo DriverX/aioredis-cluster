@@ -88,7 +88,6 @@ class coerced_keys_dict(dict):
 
 
 class _ScanIter:
-
     __slots__ = ("_scan", "_cur", "_ret")
 
     def __init__(self, scan):

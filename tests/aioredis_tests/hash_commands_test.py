@@ -41,7 +41,6 @@ async def test_hexists(redis):
 
 
 async def test_hget(redis):
-
     key, field, value = b"key:hget", b"bar", b"zap"
     await add(redis, key, field, value)
     # basic test, fetch value and check in to reference

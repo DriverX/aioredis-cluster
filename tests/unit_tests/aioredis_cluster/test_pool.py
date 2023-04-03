@@ -310,8 +310,7 @@ async def test_idle_connections_detection__collect(mocker):
 
     conn_mocks[0].close.assert_called_once_with()
     conn_mocks[0].wait_closed.assert_awaited_once_with()
-    conn_mocks[1].close.assert_called_once_with()
-    conn_mocks[1].wait_closed.assert_awaited_once_with()
+    conn_mocks[1].close.assert_not_called()
 
     # collect gen 4, nothing to close
     collect_event.set()
@@ -319,13 +318,17 @@ async def test_idle_connections_detection__collect(mocker):
     await moment_10()
     assert pool._idle_connections_collect_gen == 4
 
+    conn2 = await pool.acquire()
+    assert conn2 is conn_mocks[1]
     conn3 = await pool.acquire()
+    assert conn3 is conn_mocks[2]
+    pool.release(conn2)
     pool.release(conn3)
     await moment_10()
 
-    assert pool.freesize == 1
+    assert pool.freesize == 2
     assert mocked_create_connection.await_count == 3
     assert conn_mocks[0]._last_use_generation == 1
-    assert conn_mocks[1]._last_use_generation == 1
+    assert conn_mocks[1]._last_use_generation == 4
     assert conn_mocks[2]._last_use_generation == 4
     assert pool._idle_connections_collect_gen == 4

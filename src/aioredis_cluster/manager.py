@@ -349,9 +349,9 @@ class ClusterManager:
     def _get_init_addrs(self, reload_id: int) -> List[Address]:
         if self._follow_cluster and reload_id > 1 and self._state and self._state._data.addrs:
             addrs = list(self._state._data.addrs)
-            random.shuffle(addrs)
         else:
-            addrs = self._startup_nodes
+            addrs = list(self._startup_nodes)
+        random.shuffle(addrs)
         return addrs
 
     async def _load_state(self, reload_id: int) -> ClusterState:
