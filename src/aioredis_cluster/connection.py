@@ -15,6 +15,7 @@ from aioredis_cluster.command_info.commands import (
     PUBSUB_FAMILY_COMMANDS,
     SHARDED_PUBSUB_COMMANDS,
 )
+from aioredis_cluster.errors import MovedError
 from aioredis_cluster.typedef import PClosableConnection
 from aioredis_cluster.util import encode_command
 
@@ -161,6 +162,11 @@ class RedisConnection(BaseConnection, AbcConnection):
 
     def _process_pubsub(self, obj, *, process_waiters: bool = True):
         """Processes pubsub messages."""
+
+        if isinstance(obj, MovedError):
+            # new ssubscribe to old node of slot
+            return self._process_data(obj)
+
         kind, *args, data = obj
         if kind in (b"subscribe", b"unsubscribe"):
             (chan,) = args
