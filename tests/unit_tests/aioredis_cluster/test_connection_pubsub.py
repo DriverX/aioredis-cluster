@@ -34,10 +34,10 @@ async def test_moved_with_pubsub():
     await s
 
     s = redis.execute_pubsub("SSUBSCRIBE", "b")
-    reader.queue.put_nowait(MovedError("1 1 127.0.0.1:6379"))
-    await asyncio.sleep(0)
+    await reader.queue.put(MovedError("1 1 127.0.0.1:6379"))
+    await asyncio.wait([redis._reader_task], timeout=0.1)
     assert not redis._reader_task.done(), redis._reader_task.exception()
-    reader.queue.join()
+    await reader.queue.join()
     with pytest.raises(MovedError):
         await s
 
