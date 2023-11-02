@@ -5,6 +5,8 @@ import pytest
 from aioredis_cluster.errors import MovedError
 
 
+@pytest.mark.redis_version(gte="7.0.0")
+@pytest.mark.timeout(2)
 async def test_moved_with_pubsub(cluster):
     c = await cluster()
     redis = await c.keys_master("a")
