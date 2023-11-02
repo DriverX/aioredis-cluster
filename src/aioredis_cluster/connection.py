@@ -8,7 +8,6 @@ from aioredis_cluster._aioredis.util import coerced_keys_dict, wait_ok
 from aioredis_cluster.abc import AbcChannel, AbcConnection
 from aioredis_cluster.aioredis import Channel, ConnectionClosedError
 from aioredis_cluster.aioredis import RedisConnection as BaseConnection
-from aioredis_cluster.aioredis import RedisError
 from aioredis_cluster.aioredis.util import _NOTSET
 from aioredis_cluster.command_info.commands import (
     PING_COMMANDS,
