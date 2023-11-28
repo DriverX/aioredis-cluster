@@ -1,9 +1,12 @@
+import asyncio
+
 import pytest
 
 from aioredis_cluster.commands.commands import blocked_for_cluster
 
 
-async def test_blocked_for_cluster(mocker, event_loop) -> None:
+async def test_blocked_for_cluster(mocker) -> None:
+    event_loop = asyncio.get_running_loop()
     cluster_conn = object()
 
     def conn_is_cluster_se(conn):

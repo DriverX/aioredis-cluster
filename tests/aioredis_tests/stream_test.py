@@ -1,12 +1,16 @@
+import asyncio
+
 import pytest
+import pytest_asyncio
 
 from aioredis_cluster._aioredis.errors import ProtocolError, ReplyError
 from aioredis_cluster._aioredis.parser import PyReader
 from aioredis_cluster._aioredis.stream import StreamReader
 
 
-@pytest.fixture
-def reader(event_loop):
+@pytest_asyncio.fixture
+async def reader():
+    event_loop = asyncio.get_running_loop()
     reader = StreamReader(loop=event_loop)
     reader.set_parser(PyReader(protocolError=ProtocolError, replyError=ReplyError))
     return reader

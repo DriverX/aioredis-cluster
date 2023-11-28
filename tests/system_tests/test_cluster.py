@@ -6,7 +6,8 @@ import pytest
 from aioredis_cluster import ClusterClosedError, RedisClusterError
 
 
-async def test_cluster_close(cluster, event_loop):
+async def test_cluster_close(cluster):
+    event_loop = asyncio.get_running_loop()
     cl = await cluster()
 
     await cl.execute("set", "key", "value")

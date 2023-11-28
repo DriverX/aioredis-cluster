@@ -1,8 +1,9 @@
 import asyncio
+from unittest import mock
 
-import mock
 import pytest
 
+from aioredis_cluster.abc import AbcPool
 from aioredis_cluster.pooler import Pooler
 from aioredis_cluster.structs import Address
 
@@ -54,7 +55,8 @@ async def test_ensure_pool__multiple():
     )
 
 
-async def test_ensure_pool__only_one(event_loop):
+async def test_ensure_pool__only_one():
+    event_loop = asyncio.get_running_loop()
     pools = {
         ("h1", 1): create_pool_mock(),
         ("h2", 2): create_pool_mock(),
@@ -319,7 +321,8 @@ async def test_ensure_pool__create_pubsub_addr_set():
 
 
 async def test_reap_pools__cleanup_channels():
-    pooler = Pooler(mock.AsyncMock(), reap_frequency=-1)
+    pool_factory = mock.AsyncMock(return_value=mock.Mock(AbcPool))
+    pooler = Pooler(pool_factory, reap_frequency=-1)
 
     addr1 = Address("h1", 1)
     addr2 = Address("h2", 2)

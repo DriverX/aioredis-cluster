@@ -6,7 +6,8 @@ import pytest
 from aioredis_cluster.resource_lock import ResourceLock
 
 
-async def test_acquire__sequentially(event_loop):
+async def test_acquire__sequentially():
+    event_loop = asyncio.get_running_loop()
     lock = ResourceLock()
 
     results = []
@@ -45,7 +46,8 @@ async def test_acquire__sequentially(event_loop):
     assert results == [1, 2, 3]
 
 
-async def test_locked(event_loop):
+async def test_locked():
+    event_loop = asyncio.get_running_loop()
     lock = ResourceLock()
 
     assert lock.locked("foo") is False

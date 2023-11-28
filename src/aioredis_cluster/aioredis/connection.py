@@ -4,7 +4,7 @@ import socket
 import ssl
 from typing import Awaitable, Callable, List, Optional, Tuple, Type, Union
 
-from async_timeout import timeout as atimeout
+from aioredis_cluster.compat.asyncio import timeout as atimeout
 
 from .abc import AbcConnection
 from .util import parse_url

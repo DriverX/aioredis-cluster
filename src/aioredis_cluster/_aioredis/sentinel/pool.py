@@ -1,8 +1,7 @@
 import asyncio
-import contextlib
 from concurrent.futures import ALL_COMPLETED
 
-from async_timeout import timeout as async_timeout
+from aioredis_cluster.compat.asyncio import timeout as atimeout
 
 from ..errors import (
     MasterNotFoundError,
@@ -263,7 +262,7 @@ class SentinelPool:
         connections pool or exception.
         """
         try:
-            with async_timeout(timeout):
+            async with atimeout(timeout):
                 pool = await create_pool(
                     address,
                     minsize=1,
@@ -296,16 +295,17 @@ class SentinelPool:
         pools = self._pools[:]
         for sentinel in pools:
             try:
-                with async_timeout(timeout):
+                async with atimeout(timeout):
                     address = await self._get_masters_address(sentinel, service)
 
                 pool = self._masters[service]
-                with async_timeout(timeout), contextlib.ExitStack() as stack:
+                async with atimeout(timeout):
                     conn = await pool._create_new_connection(address)
-                    stack.callback(conn.close)
-                    await self._verify_service_role(conn, "master")
-                    stack.pop_all()
-
+                    try:
+                        await self._verify_service_role(conn, "master")
+                    except BaseException:
+                        conn.close()
+                        raise
                 return conn
             except asyncio.CancelledError:
                 # we must correctly handle CancelledError(s):
@@ -335,14 +335,16 @@ class SentinelPool:
         pools = self._pools[:]
         for sentinel in pools:
             try:
-                with async_timeout(timeout):
+                async with atimeout(timeout):
                     address = await self._get_slave_address(sentinel, service)  # add **kwargs
                 pool = self._slaves[service]
-                with async_timeout(timeout), contextlib.ExitStack() as stack:
+                async with atimeout(timeout):
                     conn = await pool._create_new_connection(address)
-                    stack.callback(conn.close)
-                    await self._verify_service_role(conn, "slave")
-                    stack.pop_all()
+                    try:
+                        await self._verify_service_role(conn, "slave")
+                    except BaseException:
+                        conn.close()
+                        raise
                 return conn
             except asyncio.CancelledError:
                 raise

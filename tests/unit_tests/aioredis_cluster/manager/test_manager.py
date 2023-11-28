@@ -1,7 +1,7 @@
 import asyncio
 import time
+from unittest import mock
 
-import mock
 import pytest
 
 from aioredis_cluster.cluster_state import ClusterState, NodeClusterState
@@ -50,7 +50,8 @@ async def test_require_reload_state(pooler_mock):
     await manager.close()
 
 
-async def test_state_reloader(mocker, pooler_mock, event_loop):
+async def test_state_reloader(mocker, pooler_mock):
+    event_loop = asyncio.get_running_loop()
     pooler = pooler_mock()
     manager = ClusterManager(["addr1", "addr2"], pooler)
 
