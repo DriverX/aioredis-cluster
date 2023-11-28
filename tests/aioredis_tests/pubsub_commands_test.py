@@ -15,7 +15,8 @@ async def _reader(channel, output, waiter, conn):
         await output.put(msg)
 
 
-async def test_publish(create_connection, redis, server, event_loop):
+async def test_publish(create_connection, redis, server):
+    event_loop = asyncio.get_running_loop()
     out = asyncio.Queue()
     fut = event_loop.create_future()
     conn = await create_connection(server.tcp_address)
@@ -29,7 +30,8 @@ async def test_publish(create_connection, redis, server, event_loop):
     sub.cancel()
 
 
-async def test_publish_json(create_connection, redis, server, event_loop):
+async def test_publish_json(create_connection, redis, server):
+    event_loop = asyncio.get_running_loop()
     out = asyncio.Queue()
     fut = event_loop.create_future()
     conn = await create_connection(server.tcp_address)
@@ -246,7 +248,8 @@ async def test_close_cancelled_pubsub_channel(redis):
     tsk.cancel()
 
 
-async def test_channel_get_after_close(create_redis, event_loop, server):
+async def test_channel_get_after_close(create_redis, server):
+    event_loop = asyncio.get_running_loop()
     sub = await create_redis(server.tcp_address)
     pub = await create_redis(server.tcp_address)
     (ch,) = await sub.subscribe("chan:1")

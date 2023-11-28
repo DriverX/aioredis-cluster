@@ -1,7 +1,7 @@
 import asyncio
 import sys
+from unittest import mock
 
-import mock
 import pytest
 from _testutils import redis_version
 
@@ -142,7 +142,9 @@ async def test_protocol_error(create_connection, server):
     assert len(conn._waiters) == 0
 
 
-def test_close_connection__tcp(create_connection, event_loop, server):
+def test_close_connection__tcp(create_connection, server):
+    event_loop = asyncio.get_running_loop()
+
     conn = event_loop.run_until_complete(create_connection(server.tcp_address))
     conn.close()
     with pytest.raises(ConnectionClosedError):
@@ -203,8 +205,10 @@ async def test_wait_closed(create_connection, server):
     assert reader_task.done()
 
 
-async def test_cancel_wait_closed(create_connection, event_loop, server):
+async def test_cancel_wait_closed(create_connection, server):
     # Regression test: Don't throw error if wait_closed() is cancelled.
+    event_loop = asyncio.get_running_loop()
+
     address = server.tcp_address
     conn = await create_connection(address)
     reader_task = conn._reader_task

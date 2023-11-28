@@ -1,4 +1,5 @@
-import mock
+from unittest import mock
+
 import pytest
 
 from aioredis_cluster.factory import create_cluster, create_redis_cluster

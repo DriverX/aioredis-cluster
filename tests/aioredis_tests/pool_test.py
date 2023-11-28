@@ -1,9 +1,9 @@
 import asyncio
 import logging
 import sys
+from unittest import mock
 
 import async_timeout
-import mock
 import pytest
 from _testutils import redis_version
 

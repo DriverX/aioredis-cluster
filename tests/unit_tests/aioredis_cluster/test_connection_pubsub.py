@@ -27,7 +27,10 @@ class Reader:
 
 async def test_moved_with_pubsub():
     reader = Reader()
-    redis = RedisConnection(reader=reader, writer=mock.AsyncMock(), address="localhost:6379")
+    writer = mock.AsyncMock()
+    writer.write = mock.Mock()
+    writer.transport = mock.NonCallableMock()
+    redis = RedisConnection(reader=reader, writer=writer, address="localhost:6379")
 
     s = redis.execute_pubsub("SSUBSCRIBE", "a")
     reader.queue.put_nowait((b"ssubscribe", b"a", 10))

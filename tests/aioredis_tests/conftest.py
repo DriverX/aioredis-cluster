@@ -111,14 +111,17 @@ def create_sentinel(_closable):
 
 
 @pytest.fixture
-def pool(create_pool, server, event_loop):
+def pool(create_pool, server):
     """Returns RedisPool instance."""
+    event_loop = asyncio.get_running_loop()
     return event_loop.run_until_complete(create_pool(server.tcp_address))
 
 
 @pytest.fixture
-def redis(create_redis, server, event_loop):
+def redis(create_redis, server):
     """Returns Redis client instance."""
+
+    event_loop = asyncio.get_running_loop()
     redis = event_loop.run_until_complete(create_redis(server.tcp_address))
 
     async def clear():
@@ -129,8 +132,10 @@ def redis(create_redis, server, event_loop):
 
 
 @pytest.fixture
-def redis_sentinel(create_sentinel, sentinel, event_loop):
+def redis_sentinel(create_sentinel, sentinel):
     """Returns Redis Sentinel client instance."""
+
+    event_loop = asyncio.get_running_loop()
     redis_sentinel = event_loop.run_until_complete(
         create_sentinel([sentinel.tcp_address], timeout=2)
     )
@@ -143,7 +148,8 @@ def redis_sentinel(create_sentinel, sentinel, event_loop):
 
 
 @pytest.yield_fixture
-def _closable(event_loop):
+def _closable():
+    event_loop = asyncio.get_running_loop()
     conns = []
 
     async def close():

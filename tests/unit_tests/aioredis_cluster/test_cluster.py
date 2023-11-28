@@ -1,6 +1,6 @@
 import asyncio
+from unittest import mock
 
-import mock
 import pytest
 
 from aioredis_cluster.aioredis import (
@@ -793,7 +793,8 @@ async def test_all_masters__with_error_after_retries(mocker):
         await cl.all_masters()
 
 
-async def test_execute__with_attempt_timeout__non_idempotent(mocker, event_loop):
+async def test_execute__with_attempt_timeout__non_idempotent(mocker):
+    event_loop = asyncio.get_running_loop()
     cl = Cluster(["addr1"], attempt_timeout=0.001)
 
     mocked_pooler = mocker.patch.object(cl, "_pooler", new=get_pooler_mock())
@@ -896,7 +897,8 @@ async def test_keys_master__with_attempt_timeout(mocker):
     assert mocked_execute_retry_slowdown.call_count == 1
 
 
-async def test_all_masters__with_attempt_timeout(mocker, event_loop):
+async def test_all_masters__with_attempt_timeout(mocker):
+    event_loop = asyncio.get_running_loop()
     cl = Cluster(["addr1"], attempt_timeout=0.001)
 
     mocked_pooler = mocker.patch.object(cl, "_pooler", new=get_pooler_mock())

@@ -1,7 +1,7 @@
 import asyncio
+from unittest import mock
 
 import async_timeout
-import mock
 import pytest
 
 from aioredis_cluster.pool import ConnectionsPool

@@ -267,7 +267,8 @@ async def test_decode_message_for_pattern():
     assert res[1] == (b"channel", {"hello": "world"})
 
 
-async def test_pubsub_receiver_iter(create_redis, server, event_loop):
+async def test_pubsub_receiver_iter(create_redis, server):
+    event_loop = asyncio.get_running_loop()
     sub = await create_redis(server.tcp_address)
     pub = await create_redis(server.tcp_address)
 
@@ -300,7 +301,8 @@ async def test_pubsub_receiver_iter(create_redis, server, event_loop):
 
 
 @pytest.mark.timeout(5)
-async def test_pubsub_receiver_call_stop_with_empty_queue(create_redis, server, event_loop):
+async def test_pubsub_receiver_call_stop_with_empty_queue(create_redis, server):
+    event_loop = asyncio.get_running_loop()
     sub = await create_redis(server.tcp_address)
 
     mpsc = Receiver()

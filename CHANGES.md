@@ -5,7 +5,7 @@ Changes
 ------------------
 
 * fix stuck `aioredis.Connection` socket reader routine for sharded PUB/SUB when cluster reshard and Redis starts respond `MOVED` error on `SSUBSCRIBE` commands [#24](https://github.com/DriverX/aioredis-cluster/pull/24)
-  
+
 2.5.0 (2023-04-03)
 ------------------
 
