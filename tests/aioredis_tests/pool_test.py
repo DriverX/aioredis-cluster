@@ -3,7 +3,6 @@ import logging
 import sys
 from unittest import mock
 
-import async_timeout
 import pytest
 from _testutils import redis_version
 
@@ -14,6 +13,7 @@ from aioredis_cluster._aioredis import (
     PoolClosedError,
     ReplyError,
 )
+from aioredis_cluster.compat.asyncio import timeout
 
 
 def _assert_defaults(pool):
@@ -261,7 +261,7 @@ async def test_select_and_create(create_pool, server):
     # then continues with proper db
 
     # TODO: refactor this test as there's no _wait_select any more.
-    with async_timeout.timeout(10):
+    async with timeout(10):
         pool = await create_pool(
             server.tcp_address,
             minsize=1,

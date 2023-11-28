@@ -142,22 +142,20 @@ async def test_protocol_error(create_connection, server):
     assert len(conn._waiters) == 0
 
 
-def test_close_connection__tcp(create_connection, server):
-    event_loop = asyncio.get_running_loop()
-
-    conn = event_loop.run_until_complete(create_connection(server.tcp_address))
+async def test_close_connection__tcp(create_connection, server):
+    conn = await create_connection(server.tcp_address)
     conn.close()
     with pytest.raises(ConnectionClosedError):
-        event_loop.run_until_complete(conn.select(1))
+        await conn.select(1)
 
-    conn = event_loop.run_until_complete(create_connection(server.tcp_address))
+    conn = await create_connection(server.tcp_address)
     conn.close()
     fut = None
     with pytest.raises(ConnectionClosedError):
         fut = conn.select(1)
     assert fut is None
 
-    conn = event_loop.run_until_complete(create_connection(server.tcp_address))
+    conn = await create_connection(server.tcp_address)
     conn.close()
     with pytest.raises(ConnectionClosedError):
         conn.execute_pubsub("subscribe", "channel:1")

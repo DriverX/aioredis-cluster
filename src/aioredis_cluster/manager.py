@@ -5,8 +5,6 @@ from contextlib import suppress
 from operator import attrgetter
 from typing import Dict, List, Optional, Sequence, Set
 
-import async_timeout
-
 from aioredis_cluster.abc import AbcConnection
 from aioredis_cluster.cluster_state import (
     ClusterState,
@@ -20,6 +18,7 @@ from aioredis_cluster.command_info import (
     create_registry,
     default_registry,
 )
+from aioredis_cluster.compat.asyncio import timeout as atimeout
 from aioredis_cluster.errors import RedisError, network_errors
 from aioredis_cluster.pooler import Pooler
 from aioredis_cluster.structs import Address, ClusterNode, ClusterSlot
@@ -206,7 +205,7 @@ class ClusterManager:
             try:
                 pool = await self._pooler.ensure_pool(addr)
                 try:
-                    async with async_timeout.timeout(tail_timeout):
+                    async with atimeout(tail_timeout):
                         conn = await pool.acquire()
                 except asyncio.TimeoutError as e:
                     last_err = e
@@ -216,7 +215,7 @@ class ClusterManager:
                 tail_timeout -= self._loop.time() - execution_start_t
 
                 try:
-                    async with async_timeout.timeout(tail_timeout):
+                    async with atimeout(tail_timeout):
                         # ensure one connection behaviour
                         raw_cluster_info: str = await conn.execute(
                             b"CLUSTER",
@@ -309,7 +308,7 @@ class ClusterManager:
             logger.debug("Cluster state auto reload after %.03f sec", reload_interval)
 
             try:
-                async with async_timeout.timeout(reload_interval):
+                async with atimeout(reload_interval):
                     await self._reload_event.wait()
             except asyncio.TimeoutError:
                 auto_reload = True
@@ -368,7 +367,7 @@ class ClusterManager:
         pool = await self._pooler.ensure_pool(state.random_master().addr)
         # fetch commands only for first cluster state load
         if reload_id == 1:
-            async with async_timeout.timeout(self._execute_timeout):
+            async with atimeout(self._execute_timeout):
                 raw_commands = await pool.execute(b"COMMAND", encoding="utf-8")
             commands = create_registry(raw_commands)
             logger.debug("Found %d supported commands in cluster", commands.size())

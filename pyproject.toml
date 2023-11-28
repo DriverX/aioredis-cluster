@@ -31,7 +31,7 @@ classifiers = [
 keywords = ["redis", "aioredis", "redis cluster", "asyncio"]
 requires-python = ">=3.8"
 dependencies = [
-    'async-timeout',
+    'async-timeout; python_version < "3.11"',
     "hiredis < 3.0.0; platform_python_implementation == 'CPython'"
 ]
 dynamic = ["version", "readme"]

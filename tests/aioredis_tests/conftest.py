@@ -1,7 +1,6 @@
 import asyncio
 import atexit
 import contextlib
-import inspect
 import os
 import socket
 import ssl
@@ -13,10 +12,11 @@ from collections import namedtuple
 from urllib.parse import urlencode, urlunparse
 
 import pytest
-from async_timeout import timeout as async_timeout
+import pytest_asyncio
 
 from aioredis_cluster import _aioredis as aioredis
 from aioredis_cluster._aioredis import sentinel as aioredis_sentinel
+from aioredis_cluster.compat.asyncio import timeout as atimeout
 
 TCPAddress = namedtuple("TCPAddress", "host port")
 
@@ -27,24 +27,12 @@ SentinelServer = namedtuple("SentinelServer", "name tcp_address unixsocket versi
 # Public fixtures
 
 
-# @pytest.yield_fixture
-# def loop():
-#     """Creates new event loop."""
-#     loop = asyncio.new_event_loop()
-#     if sys.version_info < (3, 8):
-#         asyncio.set_event_loop(loop)
-
-#     try:
-#         yield loop
-#     finally:
-#         if hasattr(loop, "is_closed"):
-#             closed = loop.is_closed()
-#         else:
-#             closed = loop._closed  # XXX
-#         if not closed:
-#             loop.call_soon(loop.stop)
-#             loop.run_forever()
-#             loop.close()
+@pytest.fixture(scope="session")
+def event_loop():
+    policy = asyncio.get_event_loop_policy()
+    loop = policy.new_event_loop()
+    yield loop
+    loop.close()
 
 
 @pytest.fixture(scope="session")
@@ -59,7 +47,7 @@ def unused_port():
     return fun
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 def create_connection(_closable):
     """Wrapper around aioredis.create_connection."""
 
@@ -71,7 +59,9 @@ def create_connection(_closable):
     return f
 
 
-@pytest.fixture(params=[aioredis.create_redis, aioredis.create_redis_pool], ids=["single", "pool"])
+@pytest_asyncio.fixture(
+    params=[aioredis.create_redis, aioredis.create_redis_pool], ids=["single", "pool"]
+)
 def create_redis(_closable, request):
     """Wrapper around aioredis.create_redis."""
     factory = request.param
@@ -84,7 +74,7 @@ def create_redis(_closable, request):
     return f
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 def create_pool(_closable):
     """Wrapper around aioredis.create_pool."""
 
@@ -96,7 +86,7 @@ def create_pool(_closable):
     return f
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 def create_sentinel(_closable):
     """Helper instantiating RedisSentinel client."""
 
@@ -110,46 +100,48 @@ def create_sentinel(_closable):
     return f
 
 
-@pytest.fixture
-def pool(create_pool, server):
+@pytest_asyncio.fixture
+async def pool(create_pool, server):
     """Returns RedisPool instance."""
-    event_loop = asyncio.get_running_loop()
-    return event_loop.run_until_complete(create_pool(server.tcp_address))
+    pool = await create_pool(server.tcp_address)
+    return pool
 
 
-@pytest.fixture
-def redis(create_redis, server):
+@pytest_asyncio.fixture
+async def redis(create_redis, server, add_async_finalizer):
     """Returns Redis client instance."""
 
-    event_loop = asyncio.get_running_loop()
-    redis = event_loop.run_until_complete(create_redis(server.tcp_address))
-
-    async def clear():
-        await redis.flushall()
-
-    event_loop.run_until_complete(clear())
+    redis = await create_redis(server.tcp_address)
+    add_async_finalizer(redis.flushall())
     return redis
 
 
-@pytest.fixture
-def redis_sentinel(create_sentinel, sentinel):
+@pytest_asyncio.fixture
+async def redis_sentinel(create_sentinel, sentinel):
     """Returns Redis Sentinel client instance."""
 
-    event_loop = asyncio.get_running_loop()
-    redis_sentinel = event_loop.run_until_complete(
-        create_sentinel([sentinel.tcp_address], timeout=2)
-    )
-
-    async def ping():
-        return await redis_sentinel.ping()
-
-    assert event_loop.run_until_complete(ping()) == b"PONG"
+    redis_sentinel = await create_sentinel([sentinel.tcp_address], timeout=2)
+    ping_result = await redis_sentinel.ping()
+    assert ping_result == b"PONG"
     return redis_sentinel
 
 
-@pytest.yield_fixture
-def _closable():
-    event_loop = asyncio.get_running_loop()
+@pytest_asyncio.fixture
+async def add_async_finalizer():
+    finalizers = []
+
+    def adder(finalizer):
+        finalizers.append(finalizer)
+
+    try:
+        yield adder
+    finally:
+        for finalizer in finalizers:
+            await finalizer
+
+
+@pytest_asyncio.fixture
+async def _closable():
     conns = []
 
     async def close():
@@ -164,22 +156,22 @@ def _closable():
     try:
         yield conns.append
     finally:
-        event_loop.run_until_complete(close())
+        await close()
 
 
-@pytest.fixture(scope="session")
+@pytest_asyncio.fixture(scope="session")
 def server(start_server):
     """Starts redis-server instance."""
     return start_server("A")
 
 
-@pytest.fixture(scope="session")
+@pytest_asyncio.fixture(scope="session")
 def serverB(start_server):
     """Starts redis-server instance."""
     return start_server("B")
 
 
-@pytest.fixture(scope="session")
+@pytest_asyncio.fixture(scope="session")
 def sentinel(start_sentinel, request, start_server):
     """Starts redis-sentinel instance with one master -- masterA."""
     # Adding master+slave for normal (no failover) tests:
@@ -191,7 +183,7 @@ def sentinel(start_sentinel, request, start_server):
     return start_sentinel("main", masterA, master_no_fail)
 
 
-@pytest.fixture(params=["path", "query"])
+@pytest_asyncio.fixture(params=["path", "query"])
 def server_tcp_url(server, request):
     def make(**kwargs):
         netloc = "{0.host}:{0.port}".format(server.tcp_address)
@@ -547,7 +539,7 @@ def ssl_proxy(_proc, request, unused_port):
     return sockat
 
 
-@pytest.yield_fixture(scope="session")
+@pytest.fixture(scope="session")
 def _proc():
     processes = []
     tmp_files = set()
@@ -572,37 +564,9 @@ def _proc():
                 pass
 
 
-@pytest.mark.tryfirst
-def pytest_pyfunc_call(pyfuncitem):
-    """
-    Run asyncio marked test functions in an event loop instead of a normal
-    function call.
-    """
-    if inspect.iscoroutinefunction(pyfuncitem.obj):
-        marker = pyfuncitem.get_closest_marker("timeout")
-        if marker is not None and marker.args:
-            timeout = marker.args[0]
-        else:
-            timeout = 15
-
-        funcargs = pyfuncitem.funcargs
-        loop = funcargs["event_loop"]
-        testargs = {arg: funcargs[arg] for arg in pyfuncitem._fixtureinfo.argnames}
-
-        loop.run_until_complete(_wait_coro(pyfuncitem.obj, testargs, timeout=timeout))
-        return True
-
-
 async def _wait_coro(corofunc, kwargs, timeout):
-    async with async_timeout(timeout):
+    async with atimeout(timeout):
         return await corofunc(**kwargs)
-
-
-# def pytest_runtest_setup(item):
-#     is_coro = inspect.iscoroutinefunction(item.obj)
-#     if is_coro and "loop" not in item.fixturenames:
-#         # inject an event loop fixture for all async tests
-#         item.fixturenames.append("loop")
 
 
 def pytest_collection_modifyitems(session, config, items):

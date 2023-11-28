@@ -1,9 +1,9 @@
 import asyncio
 from unittest import mock
 
-import async_timeout
 import pytest
 
+from aioredis_cluster.compat.asyncio import timeout
 from aioredis_cluster.pool import ConnectionsPool
 
 
@@ -64,7 +64,7 @@ async def test_acquire__correct_return_order(mocker):
     assert acquired_conn1 is conn1
 
     with pytest.raises(asyncio.TimeoutError):
-        async with async_timeout.timeout(0.001):
+        async with timeout(0.001):
             await pool.acquire()
 
     acquire_task1 = asyncio.ensure_future(pool.acquire())

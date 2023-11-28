@@ -4,9 +4,9 @@ import sys
 from collections import deque
 from typing import Deque, Optional
 
-import async_timeout
 from aioredis import Redis, create_pool
 
+from aioredis_cluster.compat.asyncio import timeout
 from aioredis_cluster.pool import ConnectionsPool
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ async def routine(routine_id: int, redis: Redis) -> None:
     count: Optional[int] = None
     while True:
         try:
-            async with async_timeout.timeout(5.0):
+            async with timeout(5.0):
                 with await redis as redis_conn:
                     count = await redis_conn.incr("counter")
                     local_count += 1
@@ -61,7 +61,7 @@ async def conn_acquirer(acquirer_id: int, redis: Redis):
     count = 0
     while True:
         try:
-            async with async_timeout.timeout(None):
+            async with timeout(None):
                 with await redis as redis_conn:
                     count += 1
                     logger.info("%d: %d acquired conn", acquirer_id, count)
