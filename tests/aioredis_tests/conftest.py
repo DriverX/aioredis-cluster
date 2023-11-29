@@ -260,6 +260,16 @@ def format_version(srv):
     return "redis_v{}".format(".".join(map(str, VERSIONS[srv])))
 
 
+_ready_check_log_entries = [
+    "The server is now ready to accept connections ",
+    "Ready to accept connections tcp",
+]
+_slave_ready_check_log_entries = [
+    "sync: Finished with success",
+    "MASTER <-> REPLICA sync: Finished with success",
+]
+
+
 @pytest.fixture(scope="session")
 def start_server(_proc, request, unused_port, server_bin):
     """Starts Redis server instance.
@@ -295,6 +305,8 @@ def start_server(_proc, request, unused_port, server_bin):
             unixsocket = "/tmp/aioredis.{}.sock".format(port)
         dumpfile = "dump-{}.rdb".format(port)
         data_dir = tempfile.gettempdir()
+        # data_dir = "/tmp/aioredis.{}.data".format(port)
+        # os.makedirs(data_dir, exist_ok=True)
         dumpfile_path = os.path.join(data_dir, dumpfile)
         stdout_file = os.path.join(data_dir, "aioredis.{}.stdout".format(port))
         tmp_files = [dumpfile_path, stdout_file]
@@ -306,6 +318,7 @@ def start_server(_proc, request, unused_port, server_bin):
                 write("dir ", data_dir)
                 write("dbfilename", dumpfile)
                 write("port", port)
+                write("locale-collate", "C")
                 if unixsocket:
                     write("unixsocket", unixsocket)
                     tmp_files.append(unixsocket)
@@ -340,6 +353,12 @@ def start_server(_proc, request, unused_port, server_bin):
                 str(port),
             ]
 
+            if version >= (7, 2):
+                args += [
+                    "--locale-collate",
+                    "C",
+                ]
+
             if password:
                 args += [
                     "--requirepass",
@@ -368,17 +387,25 @@ def start_server(_proc, request, unused_port, server_bin):
                     "--unixsocket",
                     unixsocket,
                 ]
-        f = open(stdout_file, "w")
-        atexit.register(f.close)
-        proc = _proc(
-            *args,
-            shell=False,
-            stdout=f,
-            stderr=subprocess.STDOUT,
-            _clear_tmp_files=tmp_files,
-        )
 
-        with open(stdout_file, "rt") as f_ro:
+        if verbose:
+            print(f"stdout file: {stdout_file}")
+            print("Redis args: " + " ".join(args))
+
+        f = open(stdout_file, "w")
+        # f = open("redis.log", "w")
+        atexit.register(f.close)
+        with open(stdout_file, "r") as f_ro:
+            proc = _proc(
+                *args,
+                shell=False,
+                stdout=f,
+                stderr=subprocess.STDOUT,
+                _clear_tmp_files=tmp_files,
+            )
+
+            redis_is_ready = False
+            slave_is_ready = False
             for _ in timeout(10):
                 if proc.poll() is not None and proc.returncode != 0:
                     f_ro.seek(0)
@@ -388,14 +415,23 @@ def start_server(_proc, request, unused_port, server_bin):
                 log = f_ro.readline()
                 if log and verbose:
                     print(name, ":", log, end="")
-                if "The server is now ready to accept connections " in log:
+                for ready_check_entry in _ready_check_log_entries:
+                    if ready_check_entry in log:
+                        redis_is_ready = True
+                        break
+                if redis_is_ready:
                     break
+
             if slaveof is not None:
                 for _ in timeout(10):
                     log = f_ro.readline()
                     if log and verbose:
                         print(name, ":", log, end="")
-                    if "sync: Finished with success" in log:
+                    for ready_check_entry in _slave_ready_check_log_entries:
+                        if ready_check_entry in log:
+                            slave_is_ready = True
+                            break
+                    if slave_is_ready:
                         break
         info = RedisServer(name, tcp_address, unixsocket, version, password)
         servers.setdefault(name, info)
@@ -432,6 +468,8 @@ def start_sentinel(_proc, request, unused_port, server_bin):
         port = unused_port()
         tcp_address = TCPAddress("localhost", port)
         data_dir = tempfile.gettempdir()
+        # data_dir = "/tmp/aioredis.{}.data".format(port)
+        # os.makedirs(data_dir, exist_ok=True)
         config = os.path.join(data_dir, "aioredis-sentinel.{}.conf".format(port))
         stdout_file = os.path.join(data_dir, "aioredis-sentinel.{}.stdout".format(port))
         tmp_files = [config, stdout_file]
@@ -454,12 +492,28 @@ def start_sentinel(_proc, request, unused_port, server_bin):
                 write("sentinel failover-timeout", master.name, failover_timeout)
                 write("sentinel auth-pass", master.name, master.password)
 
-        f = open(stdout_file, "w")
-        atexit.register(f.close)
-        proc = _proc(
+        args = [
             server_bin,
             config,
             "--sentinel",
+        ]
+
+        if version >= (7, 2):
+            args += [
+                "--locale-collate",
+                "C",
+            ]
+
+        if verbose:
+            print(f"stdout file: {stdout_file}")
+            print("Redis args: " + " ".join(args))
+
+        # sys.exit(1)
+
+        f = open(stdout_file, "w")
+        atexit.register(f.close)
+        proc = _proc(
+            *args,
             stdout=f,
             stderr=subprocess.STDOUT,
             _clear_tmp_files=tmp_files,
@@ -470,7 +524,7 @@ def start_sentinel(_proc, request, unused_port, server_bin):
             all_slaves = set()
         else:
             all_slaves = {m.name for m in masters}
-        with open(stdout_file, "rt") as f:
+        with open(stdout_file, "r") as f:
             for _ in timeout(30):
                 assert proc.poll() is None, ("Process terminated", proc.returncode)
                 log = f.readline()
