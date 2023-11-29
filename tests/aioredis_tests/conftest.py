@@ -305,8 +305,6 @@ def start_server(_proc, request, unused_port, server_bin):
             unixsocket = "/tmp/aioredis.{}.sock".format(port)
         dumpfile = "dump-{}.rdb".format(port)
         data_dir = tempfile.gettempdir()
-        # data_dir = "/tmp/aioredis.{}.data".format(port)
-        # os.makedirs(data_dir, exist_ok=True)
         dumpfile_path = os.path.join(data_dir, dumpfile)
         stdout_file = os.path.join(data_dir, "aioredis.{}.stdout".format(port))
         tmp_files = [dumpfile_path, stdout_file]
@@ -469,8 +467,6 @@ def start_sentinel(_proc, request, unused_port, server_bin):
         port = unused_port()
         tcp_address = TCPAddress("localhost", port)
         data_dir = tempfile.gettempdir()
-        # data_dir = "/tmp/aioredis.{}.data".format(port)
-        # os.makedirs(data_dir, exist_ok=True)
         config = os.path.join(data_dir, "aioredis-sentinel.{}.conf".format(port))
         stdout_file = os.path.join(data_dir, "aioredis-sentinel.{}.stdout".format(port))
         tmp_files = [config, stdout_file]
