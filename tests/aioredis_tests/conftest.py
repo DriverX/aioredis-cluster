@@ -318,7 +318,8 @@ def start_server(_proc, request, unused_port, server_bin):
                 write("dir ", data_dir)
                 write("dbfilename", dumpfile)
                 write("port", port)
-                write("locale-collate", "C")
+                if version >= (7, 2):
+                    write("locale-collate", "C")
                 if unixsocket:
                     write("unixsocket", unixsocket)
                     tmp_files.append(unixsocket)

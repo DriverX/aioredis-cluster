@@ -139,7 +139,7 @@ jobs:
         with:
           python-version: 3.8
       - name: Build redis-server v${{ matrix.redis-version }}
-        uses: shogo82148/actions-setup-redis@v1.17.0
+        uses: shogo82148/actions-setup-redis@v1
         with:
           redis-version: '${{ matrix.redis-version }}'
           auto-start: 'false'
