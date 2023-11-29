@@ -57,9 +57,10 @@ jobs:
     strategy:
       matrix:
         redis-version:
-          - '6.0.17'
-          - '6.2.10'
-          - '7.0.8'
+          - '6.0.20'
+          - '6.2.14'
+          - '7.0.14'
+          - '7.2.3'
         with_aioredis:
           - 'yes'
           - 'no'
@@ -127,9 +128,10 @@ jobs:
           - '3.2.13'
           - '4.0.14'
           - '5.0.9'
-          - '6.0.12'
-          - '6.2.6'
-          - '7.0.2'
+          - '6.0.20'
+          - '6.2.14'
+          - '7.0.14'
+          - '7.2.3'
     steps:
       - uses: actions/checkout@v3
       - name: 'Set up Python'
@@ -137,7 +139,7 @@ jobs:
         with:
           python-version: 3.8
       - name: Build redis-server v${{ matrix.redis-version }}
-        uses: shogo82148/actions-setup-redis@v1.17.0
+        uses: shogo82148/actions-setup-redis@v1
         with:
           redis-version: '${{ matrix.redis-version }}'
           auto-start: 'false'
