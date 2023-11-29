@@ -11,7 +11,7 @@ Requirements
 ------------
 
 * [Python](https://www.python.org) 3.8+
-* [async_timeout](https://pypi.org/project/async_timeout/)
+* [async_timeout](https://pypi.org/project/async_timeout/) (only for Python < 3.11)
 
 Features
 --------
