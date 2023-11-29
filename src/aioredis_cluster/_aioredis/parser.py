@@ -53,7 +53,12 @@ class PyReader:
 
 
 class Parser:
-    def __init__(self, protocolError: Callable, replyError: Callable, encoding: Optional[str]):
+    def __init__(
+        self,
+        protocolError: Callable,
+        replyError: Callable,
+        encoding: Optional[str],
+    ):
         self.buf: bytearray = bytearray()
         self.pos: int = 0
         self.protocolError: Callable = protocolError

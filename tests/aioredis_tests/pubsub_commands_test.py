@@ -62,6 +62,33 @@ async def test_subscribe(redis):
     assert res == [[b"unsubscribe", b"chan:1", 1], [b"unsubscribe", b"chan:2", 0]]
 
 
+async def test_subscribe__multiple_times(redis):
+    res1 = await redis.subscribe("chan:1")
+    assert redis.in_pubsub == 1
+    res2 = await redis.subscribe("chan:1")
+    assert redis.in_pubsub == 1
+    res3 = await redis.psubscribe("chan:1")
+    assert redis.in_pubsub == 2
+    # res4 = await redis.connection.execute_pubsub("SSUBSCRIBE", "chan:1")
+    # assert redis.in_pubsub == 3
+
+    ch1 = redis.channels["chan:1"]
+    ch3 = redis.patterns["chan:1"]
+
+    assert res1 == [ch1]
+    assert res2 == [ch1]
+    assert res3 == [ch3]
+
+    res = await redis.unsubscribe("chan:1")
+    assert res == [[b"unsubscribe", b"chan:1", 1]]
+
+    res = await redis.punsubscribe("chan:1")
+    assert res == [[b"punsubscribe", b"chan:1", 0]]
+
+    res = await redis.unsubscribe("chan:1")
+    assert res == [[b"unsubscribe", b"chan:1", 0]]
+
+
 @pytest.mark.parametrize(
     "create_redis",
     [

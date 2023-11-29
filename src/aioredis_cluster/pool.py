@@ -14,6 +14,7 @@ from aioredis_cluster.abc import AbcConnection, AbcPool
 from aioredis_cluster.aioredis import Channel, PoolClosedError, create_connection
 from aioredis_cluster.command_info.commands import (
     BLOCKING_COMMANDS,
+    PATTERN_PUBSUB_COMMANDS,
     PUBSUB_COMMANDS,
     PUBSUB_FAMILY_COMMANDS,
     SHARDED_PUBSUB_COMMANDS,
@@ -226,7 +227,7 @@ class ConnectionsPool(AbcPool):
 
         self._check_closed()
 
-        if command in PUBSUB_COMMANDS:
+        if command in PUBSUB_COMMANDS or command in PATTERN_PUBSUB_COMMANDS:
             conn = await self._get_pubsub_connection()
         elif command in SHARDED_PUBSUB_COMMANDS:
             conn = await self._get_sharded_pubsub_connection()
@@ -246,7 +247,7 @@ class ConnectionsPool(AbcPool):
         command = command.upper().strip()
         ret_conn: Optional[AbcConnection] = None
 
-        if command in PUBSUB_COMMANDS:
+        if command in PUBSUB_COMMANDS or command in PATTERN_PUBSUB_COMMANDS:
             if self._pubsub_conn and not self._pubsub_conn.closed:
                 ret_conn = self._pubsub_conn
         elif command in SHARDED_PUBSUB_COMMANDS:
@@ -267,18 +268,23 @@ class ConnectionsPool(AbcPool):
 
         return ret_conn, self._address
 
-    async def select(self, db):
-        """For cluster implementation this method is unavailable"""
+    async def select(self, db: int) -> bool:
+        """Changes db index for all free connections.
+
+        All previously acquired connections will be closed when released.
+
+        For cluster implementation this method is unavailable
+        """
         raise NotImplementedError("Feature is blocked in cluster mode")
 
-    async def auth(self, password) -> None:
+    async def auth(self, password: str) -> None:
         self._password = password
         async with self._cond:
             for conn in tuple(self._pool):
                 conn.set_last_use_generation(self._idle_connections_collect_gen)
                 await conn.auth(password)
 
-    async def auth_with_username(self, username, password) -> None:
+    async def auth_with_username(self, username: str, password: str) -> None:
         self._username = username
         self._password = password
         async with self._cond:

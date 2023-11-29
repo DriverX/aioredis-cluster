@@ -7,12 +7,9 @@ from typing import Awaitable, Callable, List, Optional, Tuple, Type, Union
 from aioredis_cluster.compat.asyncio import timeout as atimeout
 
 from .abc import AbcConnection
+from .stream import open_connection, open_unix_connection
 from .util import parse_url
 
-try:
-    from aioredis.stream import open_connection, open_unix_connection
-except ImportError:
-    from .._aioredis.stream import open_connection, open_unix_connection
 try:
     from aioredis.connection import MAX_CHUNK_SIZE, RedisConnection
 except ImportError:

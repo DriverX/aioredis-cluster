@@ -1,5 +1,6 @@
 import asyncio
 import sys
+from typing import Any, Dict, Generic, TypeVar
 from urllib.parse import parse_qsl, urlparse
 
 from .log import logger
@@ -8,6 +9,9 @@ try:
     from aioredis.util import _NOTSET
 except ImportError:
     _NOTSET = object()
+
+
+T = TypeVar("T")
 
 
 IS_PY38 = sys.version_info >= (3, 8)
@@ -75,13 +79,13 @@ async def wait_make_dict(fut):
     return dict(zip(it, it))
 
 
-class coerced_keys_dict(dict):
-    def __getitem__(self, other):
+class coerced_keys_dict(Generic[T], Dict[Any, T], dict):
+    def __getitem__(self, other) -> T:
         if not isinstance(other, bytes):
             other = _converters[type(other)](other)
         return dict.__getitem__(self, other)
 
-    def __contains__(self, other):
+    def __contains__(self, other) -> bool:
         if not isinstance(other, bytes):
             other = _converters[type(other)](other)
         return dict.__contains__(self, other)
@@ -108,7 +112,7 @@ class _ScanIter:
             return ret
 
 
-def _set_result(fut, result, *info):
+def _set_result(fut: asyncio.Future, result: Any, *info) -> None:
     if fut.done():
         logger.debug("Waiter future is already done %r %r", fut, info)
         assert fut.cancelled(), ("waiting future is in wrong state", fut, result, info)
@@ -116,7 +120,7 @@ def _set_result(fut, result, *info):
         fut.set_result(result)
 
 
-def _set_exception(fut, exception):
+def _set_exception(fut: asyncio.Future, exception: BaseException) -> None:
     if fut.done():
         logger.debug("Waiter future is already done %r", fut)
         assert fut.cancelled(), ("waiting future is in wrong state", fut, exception)

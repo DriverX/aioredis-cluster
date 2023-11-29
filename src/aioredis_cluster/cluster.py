@@ -29,7 +29,7 @@ from aioredis_cluster.command_exec import ExecuteContext, ExecuteFailProps, Exec
 from aioredis_cluster.command_info import CommandInfo, extract_keys
 from aioredis_cluster.commands import RedisCluster
 from aioredis_cluster.compat.asyncio import timeout as atimeout
-from aioredis_cluster.crc import key_slot
+from aioredis_cluster.crc import CrossSlotKeysError, determine_slot
 from aioredis_cluster.errors import (
     AskError,
     ClusterClosedError,
@@ -418,12 +418,10 @@ class Cluster(AbcCluster):
         await self._pooler.batch_op(authorize)
 
     def determine_slot(self, first_key: bytes, *keys: bytes) -> int:
-        slot: int = key_slot(first_key)
-        for k in keys:
-            if slot != key_slot(k):
-                raise RedisClusterError("all keys must map to the same key slot")
-
-        return slot
+        try:
+            return determine_slot(first_key, *keys)
+        except CrossSlotKeysError:
+            raise RedisClusterError(str(CrossSlotKeysError)) from None
 
     async def all_masters(self) -> List[Redis]:
         ctx = self._make_exec_context((b"PING",), {})

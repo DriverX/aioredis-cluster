@@ -1,67 +1,31 @@
-try:
-    from aioredis.commands import (
-        GeoMember,
-        GeoPoint,
-        Redis,
-        create_redis,
-        create_redis_pool,
-    )
-except ImportError:
-    from .._aioredis.commands import (
-        GeoMember,
-        GeoPoint,
-        Redis,
-        create_redis,
-        create_redis_pool,
-    )
+from .commands import GeoMember, GeoPoint, Redis, create_redis, create_redis_pool
 
 try:
     from aioredis.connection import RedisConnection
 except ImportError:
     from .._aioredis.connection import RedisConnection
 
-try:
-    from aioredis.errors import (
-        AuthError,
-        BusyGroupError,
-        ChannelClosedError,
-        ConnectionClosedError,
-        ConnectionForcedCloseError,
-        MasterNotFoundError,
-        MasterReplyError,
-        MaxClientsError,
-        MultiExecError,
-        PipelineError,
-        PoolClosedError,
-        ProtocolError,
-        ReadOnlyError,
-        RedisError,
-        ReplyError,
-        SlaveNotFoundError,
-        SlaveReplyError,
-        WatchVariableError,
-    )
-except ImportError:
-    from .._aioredis.errors import (
-        AuthError,
-        BusyGroupError,
-        ChannelClosedError,
-        ConnectionClosedError,
-        ConnectionForcedCloseError,
-        MasterNotFoundError,
-        MasterReplyError,
-        MaxClientsError,
-        MultiExecError,
-        PipelineError,
-        PoolClosedError,
-        ProtocolError,
-        ReadOnlyError,
-        RedisError,
-        ReplyError,
-        SlaveNotFoundError,
-        SlaveReplyError,
-        WatchVariableError,
-    )
+from .errors import (
+    AuthError,
+    BusyGroupError,
+    ChannelClosedError,
+    ConnectionClosedError,
+    ConnectionForcedCloseError,
+    MasterNotFoundError,
+    MasterReplyError,
+    MaxClientsError,
+    MultiExecError,
+    PipelineError,
+    PoolClosedError,
+    ProtocolError,
+    ReadOnlyError,
+    RedisError,
+    ReplyError,
+    SlaveNotFoundError,
+    SlaveReplyError,
+    WatchVariableError,
+)
+
 try:
     from aioredis.pool import ConnectionsPool
 except ImportError:

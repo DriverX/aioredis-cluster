@@ -1,9 +1,30 @@
-# import asyncio
+import pytest
+import pytest_asyncio
 
-# import pytest
+
+@pytest.fixture
+def add_finalizer():
+    finalizers = []
+
+    def adder(finalizer):
+        finalizers.append(finalizer)
+
+    try:
+        yield adder
+    finally:
+        for finalizer in finalizers:
+            finalizer()
 
 
-# def pytest_collection_modifyitems(items):
-#     for item in items:
-#         if not item.get_closest_marker("asyncio") and asyncio.iscoroutinefunction(item.function):
-#             item.add_marker(pytest.mark.asyncio)
+@pytest_asyncio.fixture
+async def add_async_finalizer():
+    finalizers = []
+
+    def adder(finalizer):
+        finalizers.append(finalizer)
+
+    try:
+        yield adder
+    finally:
+        for finalizer in finalizers:
+            await finalizer()
