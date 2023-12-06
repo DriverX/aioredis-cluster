@@ -773,11 +773,12 @@ class RedisConnection(AbcConnection):
         channel_name: bytes
 
         if kind in {b"subscribe", b"psubscribe", b"ssubscribe"}:
-            logger.debug("PubSub subscribe confirmation received: %r", obj)
+            logger.debug("PubSub %s event received: %r", kind, obj)
             # confirm PubSub mode in client side based on server reply and reset pending flag
             if self._client_in_pubsub and not self._server_in_pubsub:
                 self._server_in_pubsub = True
         elif kind in {b"unsubscribe", b"punsubscribe", b"sunsubscribe"}:
+            logger.debug("PubSub %s event received: %r", kind, obj)
             (channel_name,) = args
             channel_type = PUBSUB_RESP_KIND_TO_TYPE[kind]
             self._pubsub_channels_store.channel_unsubscribe(
