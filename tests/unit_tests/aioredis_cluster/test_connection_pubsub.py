@@ -80,7 +80,7 @@ async def test_execute__simple_subscribe(add_async_finalizer):
     assert result_channel == [[b"subscribe", b"chan", 1]]
     assert result_pattern == [[b"psubscribe", b"chan", 2]]
     assert result_sharded == [[b"ssubscribe", b"chan", 1]]
-    assert redis.in_pubsub == 3
+    assert redis.in_pubsub == 1
     assert redis._client_in_pubsub is True
     assert redis._server_in_pubsub is True
     assert len(redis._waiters) == 0
@@ -108,7 +108,10 @@ async def test_execute__simple_unsubscribe(add_async_finalizer):
     await redis.execute_pubsub("PSUBSCRIBE", "chan")
     await redis.execute_pubsub("SUBSCRIBE", "chan")
 
-    assert redis.in_pubsub == 3
+    assert redis.in_pubsub == 1
+    assert len(redis.pubsub_channels) == 1
+    assert len(redis.pubsub_patterns) == 1
+    assert len(redis.sharded_pubsub_channels) == 1
 
     reader.queue.put_nowait([b"unsubscribe", b"chan", 1])
     reader.queue.put_nowait([b"punsubscribe", b"chan", 0])
@@ -119,7 +122,10 @@ async def test_execute__simple_unsubscribe(add_async_finalizer):
 
     await moment()
 
-    assert redis.in_pubsub == 0
+    assert redis.in_pubsub == 1
+    assert len(redis.pubsub_channels) == 0
+    assert len(redis.pubsub_patterns) == 0
+    assert len(redis.sharded_pubsub_channels) == 0
     assert result_channel == [[b"unsubscribe", b"chan", 1]]
     assert result_pattern == [[b"punsubscribe", b"chan", 0]]
     assert result_sharded == [[b"sunsubscribe", b"chan", 0]]
@@ -244,7 +250,10 @@ async def test__redis_push_unsubscribe(add_async_finalizer):
     await redis.execute_pubsub("PSUBSCRIBE", "chan:3", "chan:4")
     await redis.execute_pubsub("SSUBSCRIBE", "chan:5:{shard}", "chan:6:{shard}")
 
-    assert redis.in_pubsub == 6
+    assert redis.in_pubsub == 1
+    assert len(redis.pubsub_channels) == 2
+    assert len(redis.pubsub_patterns) == 2
+    assert len(redis.sharded_pubsub_channels) == 2
 
     reader.queue.put_nowait([b"unsubscribe", b"chan:1", 3])
     reader.queue.put_nowait([b"unsubscribe", b"chan:2", 2])
@@ -257,7 +266,10 @@ async def test__redis_push_unsubscribe(add_async_finalizer):
 
     await moment()
 
-    assert redis.in_pubsub == 0
+    assert redis.in_pubsub == 1
+    assert len(redis.pubsub_channels) == 0
+    assert len(redis.pubsub_patterns) == 0
+    assert len(redis.sharded_pubsub_channels) == 0
 
     assert redis._reader_task.done() is False
 
@@ -316,7 +328,7 @@ async def test_execute__unexpectable_unsubscribe_and_moved(add_async_finalizer):
     reader.queue.put_nowait(MovedError("MOVED 10271 127.0.0.1:6379"))
     await moment()
 
-    assert redis.in_pubsub == 0
+    assert redis.in_pubsub == 1
     assert redis._reader_task.done() is False
 
 
@@ -355,7 +367,8 @@ async def test_execute__client_unsubscribe_with_server_unsubscribe(add_async_fin
     assert sub_result1 == [[b"ssubscribe", b"chan:1", 1]]
     assert sub_result2 == [[b"ssubscribe", b"chan:2", 2]]
     assert sub_result3 == [[b"ssubscribe", b"chan:3", 3]]
-    assert redis.in_pubsub == 3
+    assert redis.in_pubsub == 1
+    assert len(redis.sharded_pubsub_channels) == 3
 
     reader.queue.put_nowait([b"sunsubscribe", b"chan:1", 2])
     reader.queue.put_nowait([b"sunsubscribe", b"chan:3", 1])
@@ -370,7 +383,8 @@ async def test_execute__client_unsubscribe_with_server_unsubscribe(add_async_fin
 
     await moment()
 
-    assert redis.in_pubsub == 0
+    assert redis.in_pubsub == 1
+    assert len(redis.sharded_pubsub_channels) == 0
 
     assert redis._reader_task is not None
     assert redis._reader_task.done() is False
@@ -497,7 +511,8 @@ async def test_subscribe_and_immediately_unsubscribe(caplog, add_async_finalizer
     for record in caplog.records:
         assert "No waiter for received reply" not in record.message, record.message
 
-    assert redis.in_pubsub == 0
+    assert redis.in_pubsub == 1
+    assert len(redis.sharded_pubsub_channels) == 0
 
     assert redis._reader_task is not None
     assert redis._reader_task.done() is False

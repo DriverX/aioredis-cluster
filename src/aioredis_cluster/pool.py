@@ -305,12 +305,15 @@ class ConnectionsPool(AbcPool):
 
     @property
     def in_pubsub(self) -> int:
-        in_pubsub = 0
-        if self._pubsub_conn and not self._pubsub_conn.closed:
-            in_pubsub += self._pubsub_conn.in_pubsub
-        if self._sharded_pubsub_conn and not self._sharded_pubsub_conn.closed:
-            in_pubsub += self._sharded_pubsub_conn.in_pubsub
-        return in_pubsub
+        if self._pubsub_conn and not self._pubsub_conn.closed and self._pubsub_conn.in_pubsub:
+            return 1
+        if (
+            self._sharded_pubsub_conn
+            and not self._sharded_pubsub_conn.closed
+            and self._sharded_pubsub_conn.in_pubsub
+        ):
+            return 1
+        return 0
 
     @property
     def pubsub_channels(self) -> Mapping[str, AbcChannel]:
@@ -379,7 +382,7 @@ class ConnectionsPool(AbcPool):
                 logger.warning("Connection %r is in transaction, closing it.", conn)
                 conn.close()
             elif conn.in_pubsub:
-                logger.warning("Connection %r is in subscribe mode, closing it.", conn)
+                logger.warning("Connection %r is in PubSub mode, closing it.", conn)
                 conn.close()
             elif conn._waiters:
                 logger.warning("Connection %r has pending commands, closing it.", conn)

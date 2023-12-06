@@ -362,7 +362,10 @@ class Cluster(AbcCluster):
         Can be tested as bool indicating Pub/Sub mode state.
         """
 
-        return sum(p.in_pubsub for p in self._pooler.pools())
+        for pool in self._pooler.pools():
+            if pool.in_pubsub:
+                return 1
+        return 0
 
     @property
     def pubsub_channels(self) -> Mapping[str, AbcChannel]:

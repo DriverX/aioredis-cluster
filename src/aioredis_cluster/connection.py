@@ -95,7 +95,6 @@ class PubSub:
         self._sharded: coerced_keys_dict[AbcChannel] = coerced_keys_dict()
         self._sharded_to_slot: Dict[bytes, int] = {}
         self._slot_to_sharded: Dict[int, Set[bytes]] = {}
-        self._pending_unsubscribe: Set[Tuple[PubSubType, bytes]] = set()
 
     @property
     def channels(self) -> Mapping[str, AbcChannel]:
@@ -111,14 +110,6 @@ class PubSub:
     def sharded(self) -> Mapping[str, AbcChannel]:
         """Returns read-only sharded channels dict."""
         return MappingProxyType(self._sharded)
-
-    def channel_pending_unsubscribe(
-        self,
-        *,
-        channel_type: PubSubType,
-        channel_name: bytes,
-    ) -> None:
-        self._pending_unsubscribe.add((channel_type, channel_name))
 
     def channel_subscribe(
         self,
@@ -531,9 +522,10 @@ class RedisConnection(AbcConnection):
     def in_pubsub(self) -> int:
         """Indicates that connection is in PUB/SUB mode.
 
-        Provides the number of subscribed channels.
+        This implementation NOT provides the number of subscribed channels
+        and provides only boolean flag
         """
-        return self._pubsub_channels_store.channels_total
+        return int(self._client_in_pubsub)
 
     async def select(self, db: int) -> bool:
         """Change the selected database for the current connection."""
