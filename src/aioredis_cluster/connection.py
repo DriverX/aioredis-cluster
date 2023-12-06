@@ -59,12 +59,14 @@ logger = logging.getLogger(__name__)
 
 
 TExecuteCallback = Callable[[Any], Any]
+TExecuteErrCallback = Callable[[Exception], Exception]
 
 
 class ExecuteWaiter(NamedTuple):
     fut: asyncio.Future
     enc: Optional[str]
     cb: Optional[TExecuteCallback]
+    err_cb: Optional[TExecuteErrCallback]
 
 
 class PParserFactory(Protocol):
@@ -295,7 +297,7 @@ class RedisConnection(AbcConnection):
         fut = self.execute(b"AUTH", password)
         return await wait_ok(fut)
 
-    async def execute(self, command, *args, encoding=_NOTSET) -> Any:
+    def execute(self, command, *args, encoding=_NOTSET) -> Any:
         """Executes redis command and returns Future waiting for the answer.
 
         Raises:
@@ -347,12 +349,13 @@ class RedisConnection(AbcConnection):
                 fut=fut,
                 enc=encoding,
                 cb=cb,
+                err_cb=None,
             )
         )
 
-        return await fut
+        return fut
 
-    async def execute_pubsub(self, command, *channels: Union[bytes, str, AbcChannel]):
+    def execute_pubsub(self, command, *channels: Union[bytes, str, AbcChannel]):
         """Executes redis (p|s)subscribe/(p|s)unsubscribe commands.
 
         Returns asyncio.gather coroutine waiting for all channels/patterns
@@ -372,41 +375,44 @@ class RedisConnection(AbcConnection):
         key_slot = -1
         reply_kind = ensure_bytes(command.lower())
 
-        channels_obj: Dict[str, AbcChannel]
+        channels_obj: List[AbcChannel]
         if len(channels) == 0:
             if is_subscribe_command:
                 raise ValueError("No channels to (un)subscribe")
             elif channel_type is PubSubType.PATTERN:
-                channels_obj = dict(self._pubsub_channels_store.patterns)
+                channels_obj = list(self._pubsub_channels_store.patterns.values())
             elif channel_type is PubSubType.SHARDED:
-                channels_obj = dict(self._pubsub_channels_store.sharded)
+                channels_obj = list(self._pubsub_channels_store.sharded.values())
             else:
-                channels_obj = dict(self._pubsub_channels_store.channels)
+                channels_obj = list(self._pubsub_channels_store.channels.values())
         else:
             mkchannel = partial(Channel, is_pattern=is_pattern)
-            channels_obj = {}
+            channels_obj = []
             for channel_name_or_obj in channels:
-                if not isinstance(channel_name_or_obj, AbcChannel):
+                if isinstance(channel_name_or_obj, AbcChannel):
+                    ch = channel_name_or_obj
+                else:
                     ch = mkchannel(channel_name_or_obj)
-                if ch.name in channels_obj:
-                    raise ValueError(f"Found channel duplicates in {channels!r}")
+                # FIXME: processing duplicate channels totally broken in aioredis
+                # if ch.name in channels_obj:
+                #     raise ValueError(f"Found channel duplicates in {channels!r}")
                 if ch.is_pattern != is_pattern:
                     raise ValueError(f"Not all channels {channels!r} match command {command!r}")
-                channels_obj[ch.name] = ch
+                channels_obj.append(ch)
 
             if channel_type is PubSubType.SHARDED:
                 try:
-                    key_slot = determine_slot(*(ensure_bytes(name) for name in channels_obj.keys()))
+                    key_slot = determine_slot(*(ensure_bytes(ch.name) for ch in channels_obj))
                 except CrossSlotError:
                     raise ValueError(
                         f"Not all channels shared one key slot in cluster {channels!r}"
                     ) from None
 
-        cmd = encode_command(command, *(name for name in channels_obj.keys()))
+        cmd = encode_command(command, *(ch.name for ch in channels_obj))
         res: List[Any] = []
 
         if is_subscribe_command:
-            for ch in channels_obj.values():
+            for ch in channels_obj:
                 channel_name = ensure_bytes(ch.name)
                 self._pubsub_channels_store.channel_subscribe(
                     channel_type=channel_type,
@@ -422,7 +428,7 @@ class RedisConnection(AbcConnection):
 
         # otherwise unsubscribe command
         else:
-            for ch in channels_obj.values():
+            for ch in channels_obj:
                 channel_name = ensure_bytes(ch.name)
                 self._pubsub_channels_store.channel_unsubscribe(
                     channel_type=channel_type,
@@ -449,30 +455,15 @@ class RedisConnection(AbcConnection):
                 ExecuteWaiter(
                     fut=fut,
                     enc=None,
-                    cb=self._process_pubsub,
+                    cb=self._get_execute_pubsub_callback(command, res),
+                    err_cb=self._get_execute_pubsub_err_callback(),
                 )
             )
+        else:
+            fut = self._loop.create_future()
+            fut.set_result(res)
 
-            try:
-                server_reply = await fut
-            except ReplyError:
-                # return PubSub mode to closed state if any reply error received
-                self._client_in_pubsub = False
-                raise
-
-            if list(server_reply) != res[0]:
-                if logger.isEnabledFor(logging.DEBUG):
-                    logger.error(
-                        "Unexpected server reply on PubSub on %r: %r, expected %r",
-                        command,
-                        server_reply,
-                        res[0],
-                    )
-                exc = RedisError(f"Unexpected server reply on PubSub {command!r}")
-                self._do_close(exc)
-                raise exc
-
-        return res
+        return fut
 
     def get_last_use_generation(self) -> int:
         return self._last_use_generation
@@ -705,6 +696,14 @@ class RedisConnection(AbcConnection):
             return
 
         waiter = self._waiters.popleft()
+
+        if waiter.err_cb is not None:
+            try:
+                exc = waiter.err_cb(exc)
+            except Exception as cb_exc:
+                logger.exception("Waiter error callback failed with exception: %r", cb_exc)
+                exc = cb_exc
+
         _set_exception(waiter.fut, exc)
         if self._in_transaction is not None:
             self._transaction_error = exc
@@ -838,3 +837,37 @@ class RedisConnection(AbcConnection):
                 self._pipeline_buffer = None
         else:
             yield self
+
+    def _get_execute_pubsub_callback(
+        self, command: Union[str, bytes], expect_replies: List[Any]
+    ) -> TExecuteCallback:
+        def callback(server_reply: Any) -> Any:
+            # this callback processing only first reply on (p|s)(un)subscribe commands
+
+            server_reply = self._process_pubsub(server_reply)
+
+            if list(server_reply) != expect_replies[0]:
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.error(
+                        "Unexpected server reply on PubSub on %r: %r, expected %r",
+                        command,
+                        server_reply,
+                        expect_replies[0],
+                    )
+
+                exc = RedisError(f"Unexpected server reply on PubSub {command!r}")
+                self._loop.call_soon(self._do_close, exc)
+                raise exc
+
+            return expect_replies
+
+        return callback
+
+    def _get_execute_pubsub_err_callback(self) -> TExecuteErrCallback:
+        def callback(exc: Exception) -> Exception:
+            if isinstance(exc, ReplyError):
+                # return PubSub mode to closed state if any reply error received
+                self._client_in_pubsub = False
+            return exc
+
+        return callback

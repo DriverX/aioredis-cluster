@@ -53,6 +53,14 @@ async def close_connection(conn: RedisConnection) -> None:
     await conn.wait_closed()
 
 
+async def execute(redis: RedisConnection, *args, **kwargs):
+    return await redis.execute(*args, **kwargs)
+
+
+async def execute_pubsub(redis: RedisConnection, *args, **kwargs):
+    return await redis.execute_pubsub(*args, **kwargs)
+
+
 async def test_execute__simple_subscribe(add_async_finalizer):
     reader = get_mocked_reader()
     writer = get_mocked_writer()
@@ -158,12 +166,12 @@ async def test_execute__half_open_pubsub_mode(add_async_finalizer):
     redis = RedisConnection(reader=reader, writer=writer, address="localhost:6379")
     add_async_finalizer(lambda: close_connection(redis))
 
-    get_task = asyncio.ensure_future(redis.execute("GET", "foo", encoding="utf-8"))
-    ping1_task = asyncio.ensure_future(redis.execute("PING", "ping_reply1"))
-    subs_task = asyncio.ensure_future(redis.execute_pubsub("SSUBSCRIBE", "chan"))
+    get_task = asyncio.ensure_future(execute(redis, "GET", "foo", encoding="utf-8"))
+    ping1_task = asyncio.ensure_future(execute(redis, "PING", "ping_reply1"))
+    subs_task = asyncio.ensure_future(execute_pubsub(redis, "SSUBSCRIBE", "chan"))
     # SET not send and execute() must raise RedisError exception
-    set_task = asyncio.ensure_future(redis.execute("SET", "foo", "val2"))
-    ping2_task = asyncio.ensure_future(redis.execute("PING", "ping_reply2", encoding="utf-8"))
+    set_task = asyncio.ensure_future(execute(redis, "SET", "foo", "val2"))
+    ping2_task = asyncio.ensure_future(execute(redis, "PING", "ping_reply2", encoding="utf-8"))
 
     # need extra loop for asyncio.ensure_future starts a tasks
     await moment()
