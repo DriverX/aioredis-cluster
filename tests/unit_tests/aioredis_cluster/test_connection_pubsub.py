@@ -9,6 +9,8 @@ from aioredis_cluster.command_info.commands import PUBSUB_SUBSCRIBE_COMMANDS
 from aioredis_cluster.connection import RedisConnection
 from aioredis_cluster.errors import MovedError, RedisError
 
+pytestmark = [pytest.mark.timeout(1)]
+
 
 async def moment(times: int = 1) -> None:
     for _ in range(times):
@@ -305,6 +307,23 @@ async def test_execute__unexpectable_unsubscribe_and_moved(add_async_finalizer):
     await moment()
 
     assert redis.in_pubsub == 0
+    assert redis._reader_task.done() is False
+
+
+async def test_execute__ssubscribe_with_first_moved(add_async_finalizer):
+    reader = get_mocked_reader()
+    writer = get_mocked_writer()
+    redis = RedisConnection(reader=reader, writer=writer, address="localhost:6379")
+    add_async_finalizer(lambda: close_connection(redis))
+
+    reader.queue.put_nowait(MovedError("MOVED 10271 127.0.0.1:6379"))
+
+    with pytest.raises(MovedError, match="MOVED 10271 127.0.0.1:6379"):
+        await redis.execute_pubsub("SSUBSCRIBE", "chan1:{shard1}")
+
+    assert redis.in_pubsub == 0
+    assert redis._client_in_pubsub is False
+    assert redis._server_in_pubsub is False
     assert redis._reader_task.done() is False
 
 

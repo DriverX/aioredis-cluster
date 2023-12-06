@@ -166,6 +166,9 @@ class PubSub:
             channel = self._sharded.pop(channel_name)
             channel.close()
 
+    def have_slot_channels(self, key_slot: int) -> bool:
+        return key_slot in self._slot_to_sharded
+
     @property
     def channels_total(self) -> int:
         return len(self._channels) + len(self._patterns) + len(self._sharded)
@@ -449,8 +452,15 @@ class RedisConnection(AbcConnection):
                     cb=self._process_pubsub,
                 )
             )
-            server_reply = list(await fut)
-            if server_reply != res[0]:
+
+            try:
+                server_reply = await fut
+            except ReplyError:
+                # return PubSub mode to closed state if any reply error received
+                self._client_in_pubsub = False
+                raise
+
+            if list(server_reply) != res[0]:
                 if logger.isEnabledFor(logging.DEBUG):
                     logger.error(
                         "Unexpected server reply on PubSub on %r: %r, expected %r",
@@ -668,7 +678,16 @@ class RedisConnection(AbcConnection):
                         self._process_pubsub(obj)
                 else:
                     if isinstance(obj, RedisError):
-                        if isinstance(obj, ReplyError):
+                        if isinstance(obj, MovedError):
+                            if self._pubsub_channels_store.have_slot_channels(obj.info.slot_id):
+                                logger.warning(
+                                    "Received MOVED. Unsubscribe all channels from %d slot",
+                                    obj.info.slot_id,
+                                )
+                                self._pubsub_channels_store.slot_channels_unsubscribe(
+                                    obj.info.slot_id
+                                )
+                        elif isinstance(obj, ReplyError):
                             if obj.args[0].startswith("READONLY"):
                                 obj = ReadOnlyError(obj.args[0])
                         self._wakeup_waiter_with_exc(obj)

@@ -3,15 +3,15 @@ import collections
 import logging
 import random
 import types
-from typing import Deque, Dict, List, Mapping, Optional, Set, Tuple, Type, Union
+from typing import Deque, List, Mapping, Optional, Set, Tuple, Type, Union
 
 from aioredis_cluster._aioredis.pool import (
     _AsyncConnectionContextManager,
     _ConnectionContextManager,
 )
 from aioredis_cluster._aioredis.util import CloseEvent
-from aioredis_cluster.abc import AbcConnection, AbcPool
-from aioredis_cluster.aioredis import Channel, PoolClosedError, create_connection
+from aioredis_cluster.abc import AbcChannel, AbcConnection, AbcPool
+from aioredis_cluster.aioredis import PoolClosedError, create_connection
 from aioredis_cluster.command_info.commands import (
     BLOCKING_COMMANDS,
     PATTERN_PUBSUB_COMMANDS,
@@ -313,21 +313,19 @@ class ConnectionsPool(AbcPool):
         return in_pubsub
 
     @property
-    def pubsub_channels(self) -> Mapping[str, Channel]:
-        channels: Dict[str, Channel] = {}
+    def pubsub_channels(self) -> Mapping[str, AbcChannel]:
         if self._pubsub_conn and not self._pubsub_conn.closed:
-            channels.update(self._pubsub_conn.pubsub_channels)
-        return types.MappingProxyType(channels)
+            return self._pubsub_conn.pubsub_channels
+        return types.MappingProxyType({})
 
     @property
-    def sharded_pubsub_channels(self) -> Mapping[str, Channel]:
-        channels: Dict[str, Channel] = {}
+    def sharded_pubsub_channels(self) -> Mapping[str, AbcChannel]:
         if self._sharded_pubsub_conn and not self._sharded_pubsub_conn.closed:
-            channels.update(self._sharded_pubsub_conn.sharded_pubsub_channels)
-        return types.MappingProxyType(channels)
+            return self._sharded_pubsub_conn.sharded_pubsub_channels
+        return types.MappingProxyType({})
 
     @property
-    def pubsub_patterns(self):
+    def pubsub_patterns(self) -> Mapping[str, AbcChannel]:
         if self._pubsub_conn and not self._pubsub_conn.closed:
             return self._pubsub_conn.pubsub_patterns
         return types.MappingProxyType({})

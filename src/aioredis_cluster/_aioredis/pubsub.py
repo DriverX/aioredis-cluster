@@ -4,6 +4,7 @@ import json
 import sys
 import types
 import warnings
+from typing import Optional
 
 from .abc import AbcChannel
 from .errors import ChannelClosedError
@@ -37,17 +38,17 @@ class Channel(AbcChannel):
         )
 
     @property
-    def name(self):
+    def name(self) -> bytes:
         """Encoded channel name/pattern."""
         return self._name
 
     @property
-    def is_pattern(self):
+    def is_pattern(self) -> bool:
         """Set to True if channel is subscribed to pattern."""
         return self._is_pattern
 
     @property
-    def is_active(self):
+    def is_active(self) -> bool:
         """Returns True until there are messages in channel or
         connection is subscribed to it.
 
@@ -87,11 +88,11 @@ class Channel(AbcChannel):
             return dest_channel, msg
         return msg
 
-    async def get_json(self, encoding="utf-8"):
+    async def get_json(self, encoding: str = "utf-8"):
         """Shortcut to get JSON messages."""
         return await self.get(encoding=encoding, decoder=json.loads)
 
-    def iter(self, *, encoding=None, decoder=None):
+    def iter(self, *, encoding: Optional[str] = None, decoder=None):
         """Same as get method but its native coroutine.
 
         Usage example:
@@ -103,7 +104,7 @@ class Channel(AbcChannel):
             self, is_active=lambda ch: ch.is_active, encoding=encoding, decoder=decoder
         )
 
-    async def wait_message(self):
+    async def wait_message(self) -> bool:
         """Waits for message to become available in channel
         or channel is closed (unsubscribed).
 
@@ -121,10 +122,10 @@ class Channel(AbcChannel):
 
     # internal methods
 
-    def put_nowait(self, data):
+    def put_nowait(self, data) -> None:
         self._queue.put(data)
 
-    def close(self, exc=None):
+    def close(self, exc: Optional[BaseException] = None) -> None:
         """Marks channel as inactive.
 
         Internal method, will be called from connection
