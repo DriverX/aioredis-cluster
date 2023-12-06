@@ -1,9 +1,11 @@
 import asyncio
+import logging
 from asyncio.queues import Queue
 from unittest import mock
 
 import pytest
 
+from aioredis_cluster.aioredis import ChannelClosedError
 from aioredis_cluster.aioredis.stream import StreamReader
 from aioredis_cluster.command_info.commands import PUBSUB_SUBSCRIBE_COMMANDS
 from aioredis_cluster.connection import RedisConnection
@@ -121,8 +123,8 @@ async def test_execute__simple_unsubscribe(add_async_finalizer):
     assert result_channel == [[b"unsubscribe", b"chan", 1]]
     assert result_pattern == [[b"punsubscribe", b"chan", 0]]
     assert result_sharded == [[b"sunsubscribe", b"chan", 0]]
-    assert redis._client_in_pubsub is False
-    assert redis._server_in_pubsub is False
+    assert redis._client_in_pubsub is True
+    assert redis._server_in_pubsub is True
 
 
 @pytest.mark.parametrize(
@@ -434,3 +436,68 @@ async def test_subscribe_and_receive_messages(add_async_finalizer):
     assert channel_msg == b"channel_msg"
     assert pattern_msg == (b"chan:foo", b"pattern_msg")
     assert sharded_msg == b"sharded_msg"
+
+    assert redis._reader_task is not None
+    assert redis._reader_task.done() is False
+
+
+async def test_receive_message_after_unsubscribe(caplog, add_async_finalizer):
+    reader = get_mocked_reader()
+    writer = get_mocked_writer()
+    redis = RedisConnection(reader=reader, writer=writer, address="localhost:6379")
+    add_async_finalizer(lambda: close_connection(redis))
+
+    with caplog.at_level(logging.WARNING):
+        reader.queue.put_nowait([b"ssubscribe", b"chan:{shard}", 1])
+        await redis.execute_pubsub("SSUBSCRIBE", "chan:{shard}")
+        sharded = redis.sharded_pubsub_channels["chan:{shard}"]
+        await redis.execute_pubsub("SUNSUBSCRIBE", "chan:{shard}")
+
+        reader.queue.put_nowait([b"smessage", b"chan:{shard}", b"sharded_msg"])
+
+        await moment()
+
+    assert sharded.is_active is False
+    assert sharded._queue.qsize() == 0
+    with pytest.raises(ChannelClosedError):
+        await sharded.get()
+
+    no_channel_record = ""
+    for record in caplog.records:
+        assert "No waiter for received reply" not in record.message, record.message
+        if "No channel" in record.message and "for received message" in record.message:
+            no_channel_record = record.message
+
+    assert no_channel_record != ""
+
+    assert redis._reader_task is not None
+    assert redis._reader_task.done() is False
+
+
+async def test_subscribe_and_immediately_unsubscribe(caplog, add_async_finalizer):
+    reader = get_mocked_reader()
+    writer = get_mocked_writer()
+    redis = RedisConnection(reader=reader, writer=writer, address="localhost:6379")
+    add_async_finalizer(lambda: close_connection(redis))
+
+    reader.queue.put_nowait([b"ssubscribe", b"chan1:{shard}", 1])
+    reader.queue.put_nowait([b"ssubscribe", b"chan2:{shard}", 2])
+
+    await redis.execute_pubsub("SSUBSCRIBE", "chan1:{shard}")
+    await redis.execute_pubsub("SSUBSCRIBE", "chan2:{shard}")
+
+    with caplog.at_level(logging.ERROR):
+        await redis.execute_pubsub("SUNSUBSCRIBE", "chan2:{shard}")
+        await redis.execute_pubsub("SUNSUBSCRIBE", "chan1:{shard}")
+        reader.queue.put_nowait([b"sunsubscribe", b"chan2:{shard}", 1])
+        reader.queue.put_nowait([b"sunsubscribe", b"chan1:{shard}", 0])
+
+        await moment(2)
+
+    for record in caplog.records:
+        assert "No waiter for received reply" not in record.message, record.message
+
+    assert redis.in_pubsub == 0
+
+    assert redis._reader_task is not None
+    assert redis._reader_task.done() is False

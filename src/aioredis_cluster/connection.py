@@ -95,6 +95,7 @@ class PubSub:
         self._sharded: coerced_keys_dict[AbcChannel] = coerced_keys_dict()
         self._sharded_to_slot: Dict[bytes, int] = {}
         self._slot_to_sharded: Dict[int, Set[bytes]] = {}
+        self._pending_unsubscribe: Set[Tuple[PubSubType, bytes]] = set()
 
     @property
     def channels(self) -> Mapping[str, AbcChannel]:
@@ -110,6 +111,14 @@ class PubSub:
     def sharded(self) -> Mapping[str, AbcChannel]:
         """Returns read-only sharded channels dict."""
         return MappingProxyType(self._sharded)
+
+    def channel_pending_unsubscribe(
+        self,
+        *,
+        channel_type: PubSubType,
+        channel_name: bytes,
+    ) -> None:
+        self._pending_unsubscribe.add((channel_type, channel_name))
 
     def channel_subscribe(
         self,
@@ -182,6 +191,16 @@ class PubSub:
     @property
     def sharded_channels_num(self) -> int:
         return len(self._sharded)
+
+    def has_channel(self, channel_type: PubSubType, channel_name: bytes) -> bool:
+        ret = False
+        if channel_type is PubSubType.CHANNEL:
+            ret = channel_name in self._channels
+        elif channel_type is PubSubType.PATTERN:
+            ret = channel_name in self._patterns
+        elif channel_type is PubSubType.SHARDED:
+            ret = channel_name in self._sharded
+        return ret
 
     def get_channel(self, channel_type: PubSubType, channel_name: bytes) -> AbcChannel:
         if channel_type is PubSubType.CHANNEL:
@@ -785,19 +804,24 @@ class RedisConnection(AbcConnection):
                 channel_type=channel_type,
                 channel_name=channel_name,
             )
-            if self._pubsub_channels_store.channels_total == 0:
-                self._server_in_pubsub = False
-                self._client_in_pubsub = False
-        elif kind in {b"message", b"smessage"}:
-            (channel_name,) = args
+        elif kind in {b"message", b"smessage", b"pmessage"}:
+            if kind == b"pmessage":
+                (pattern, channel_name) = args
+            else:
+                (channel_name,) = args
+                pattern = channel_name
+
             channel_type = PUBSUB_RESP_KIND_TO_TYPE[kind]
-            channel = self._pubsub_channels_store.get_channel(channel_type, channel_name)
-            channel.put_nowait(data)
-        elif kind == b"pmessage":
-            (pattern, channel_name) = args
-            channel_type = PUBSUB_RESP_KIND_TO_TYPE[kind]
-            channel = self._pubsub_channels_store.get_channel(channel_type, pattern)
-            channel.put_nowait((channel_name, data))
+            if self._pubsub_channels_store.has_channel(channel_type, pattern):
+                channel = self._pubsub_channels_store.get_channel(channel_type, pattern)
+                if channel_type is PubSubType.PATTERN:
+                    channel.put_nowait((channel_name, data))
+                else:
+                    channel.put_nowait(data)
+            else:
+                logger.warning(
+                    "No channel %r with type %s for received message", pattern, channel_type
+                )
         elif kind == b"pong":
             if not self._waiters:
                 logger.error("No PubSub PONG waiters for received data %r", data)
