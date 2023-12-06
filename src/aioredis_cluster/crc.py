@@ -11,7 +11,7 @@ __all__ = (
     "crc16",
     "key_slot",
     "determine_slot",
-    "CrossSlotKeysError",
+    "CrossSlotError",
 )
 
 REDIS_CLUSTER_HASH_SLOTS = 16384
@@ -47,7 +47,7 @@ else:
     key_slot = py_key_slot
 
 
-class CrossSlotKeysError(Exception):
+class CrossSlotError(Exception):
     pass
 
 
@@ -55,6 +55,6 @@ def determine_slot(first_key: bytes, *keys: bytes) -> int:
     slot: int = key_slot(first_key)
     for k in keys:
         if slot != key_slot(k):
-            raise CrossSlotKeysError("all keys must map to the same key slot")
+            raise CrossSlotError("all keys must map to the same key slot")
 
     return slot

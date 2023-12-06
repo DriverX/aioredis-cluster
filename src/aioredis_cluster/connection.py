@@ -50,7 +50,7 @@ from aioredis_cluster.command_info.commands import (
     PUBSUB_SUBSCRIBE_COMMANDS,
     PubSubType,
 )
-from aioredis_cluster.crc import CrossSlotKeysError, determine_slot
+from aioredis_cluster.crc import CrossSlotError, determine_slot
 from aioredis_cluster.errors import MovedError, RedisError
 from aioredis_cluster.typedef import PClosableConnection
 from aioredis_cluster.util import encode_command, ensure_bytes
@@ -394,7 +394,7 @@ class RedisConnection(AbcConnection):
             if channel_type is PubSubType.SHARDED:
                 try:
                     key_slot = determine_slot(*(ensure_bytes(name) for name in channels_obj.keys()))
-                except CrossSlotKeysError:
+                except CrossSlotError:
                     raise ValueError(
                         f"Not all channels shared one key slot in cluster {channels!r}"
                     ) from None
