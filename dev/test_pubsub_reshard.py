@@ -1,19 +1,14 @@
 import argparse
 import asyncio
 import logging
-import random
 import signal
 from collections import deque
-from typing import Counter, Deque, Dict, Mapping, Optional, Set
-
-try:
-    from aioredis import Channel, Redis
-except ImportError:
-    from aioredis_cluster.aioredis import Redis, Channel
+from typing import Counter, Deque, Dict, Mapping, Optional
 
 import async_timeout
 
 from aioredis_cluster import RedisCluster, create_redis_cluster
+from aioredis_cluster.aioredis import Channel
 
 logger = logging.getLogger(__name__)
 
