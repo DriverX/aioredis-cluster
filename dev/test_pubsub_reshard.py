@@ -11,8 +11,9 @@ try:
 except ImportError:
     from aioredis_cluster.aioredis import Redis, Channel
 
-from aioredis_cluster import RedisCluster, create_redis_cluster
 import async_timeout
+
+from aioredis_cluster import RedisCluster, create_redis_cluster
 
 logger = logging.getLogger(__name__)
 
