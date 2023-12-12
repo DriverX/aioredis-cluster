@@ -240,15 +240,25 @@ async def test__redis_push_unsubscribe(add_async_finalizer):
     redis = RedisConnection(reader=reader, writer=writer, address="localhost:6379")
     add_async_finalizer(lambda: close_connection(redis))
 
+    sub_task = asyncio.ensure_future(redis.execute_pubsub("SUBSCRIBE", "chan:1", "chan:2"))
+    psub_task = asyncio.ensure_future(redis.execute_pubsub("PSUBSCRIBE", "chan:3", "chan:4"))
+    ssub_task = asyncio.ensure_future(
+        redis.execute_pubsub("SSUBSCRIBE", "chan:5:{shard}", "chan:6:{shard}")
+    )
+    await moment()
+
+    # push replies
     reader.queue.put_nowait([b"subscribe", b"chan:1", 1])
     reader.queue.put_nowait([b"subscribe", b"chan:2", 2])
     reader.queue.put_nowait([b"psubscribe", b"chan:3", 3])
     reader.queue.put_nowait([b"psubscribe", b"chan:4", 4])
     reader.queue.put_nowait([b"ssubscribe", b"chan:5:{shard}", 1])
     reader.queue.put_nowait([b"ssubscribe", b"chan:6:{shard}", 2])
-    await redis.execute_pubsub("SUBSCRIBE", "chan:1", "chan:2")
-    await redis.execute_pubsub("PSUBSCRIBE", "chan:3", "chan:4")
-    await redis.execute_pubsub("SSUBSCRIBE", "chan:5:{shard}", "chan:6:{shard}")
+    await moment()
+
+    assert sub_task.result()
+    assert psub_task.result()
+    assert ssub_task.result()
 
     assert redis.in_pubsub == 1
     assert len(redis.pubsub_channels) == 2
@@ -272,6 +282,8 @@ async def test__redis_push_unsubscribe(add_async_finalizer):
     assert len(redis.sharded_pubsub_channels) == 0
 
     assert redis._reader_task.done() is False
+
+    assert len(redis._pubsub_store._unconfirmed_subscribes) == 0
 
 
 async def test_moved_with_pubsub(add_async_finalizer):
@@ -516,3 +528,41 @@ async def test_subscribe_and_immediately_unsubscribe(caplog, add_async_finalizer
 
     assert redis._reader_task is not None
     assert redis._reader_task.done() is False
+
+
+async def test_immediately_resubscribe(caplog, add_async_finalizer):
+    reader = get_mocked_reader()
+    writer = get_mocked_writer()
+    redis = RedisConnection(reader=reader, writer=writer, address="localhost:6379")
+    add_async_finalizer(lambda: close_connection(redis))
+
+    # switch connection to pubsub mode
+    reader.queue.put_nowait([b"ssubscribe", b"chan1:{shard}", 1])
+    await redis.execute_pubsub("SSUBSCRIBE", "chan1:{shard}")
+
+    reader.queue.put_nowait([b"ssubscribe", b"chan2:{shard}", 2])
+    await redis.execute_pubsub("SSUBSCRIBE", "chan2:{shard}")
+
+    unsub_task = asyncio.ensure_future(redis.execute_pubsub("SUNSUBSCRIBE", "chan2:{shard}"))
+    sub_task = asyncio.ensure_future(redis.execute_pubsub("SSUBSCRIBE", "chan2:{shard}"))
+    await moment()
+
+    assert unsub_task.done() is True
+    assert sub_task.done() is True
+
+    ch = redis.sharded_pubsub_channels["chan2:{shard}"]
+
+    ch_get_task = asyncio.ensure_future(ch.get())
+    # start task
+    await moment()
+
+    # redis send sequence of replies
+    reader.queue.put_nowait([b"sunsubscribe", b"chan2:{shard}", 1])
+    reader.queue.put_nowait([b"ssubscribe", b"chan2:{shard}", 2])
+
+    # consume replies
+    await moment()
+    # wait done callback for ch.get()
+    await moment()
+
+    assert ch_get_task.done() is False

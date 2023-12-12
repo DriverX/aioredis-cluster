@@ -5,10 +5,9 @@ import signal
 from collections import deque
 from typing import Counter, Deque, Dict, Mapping, Optional
 
-import async_timeout
-
 from aioredis_cluster import RedisCluster, create_redis_cluster
 from aioredis_cluster.aioredis import Channel
+from aioredis_cluster.compat.asyncio import timeout
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +54,7 @@ async def subscribe_routine(
                 prev_ch = ch
                 # logger.info('Wait channel %s', ch_name)
                 try:
-                    async with async_timeout.timeout(1.0):
+                    async with timeout(1.0):
                         res = await ch.get()
                 except asyncio.TimeoutError:
                     counters["timeouts"] += 1

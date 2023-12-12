@@ -4,30 +4,21 @@ import warnings
 from collections import deque
 from contextlib import contextmanager
 from functools import partial
-from types import MappingProxyType
 from typing import (
     Any,
     Callable,
     Deque,
-    Dict,
     Iterable,
     List,
     Mapping,
     NamedTuple,
     Optional,
     Protocol,
-    Set,
     Tuple,
     Union,
 )
 
-from aioredis_cluster._aioredis.util import (
-    _set_exception,
-    _set_result,
-    coerced_keys_dict,
-    decode,
-    wait_ok,
-)
+from aioredis_cluster._aioredis.util import _set_exception, _set_result, decode, wait_ok
 from aioredis_cluster.abc import AbcChannel, AbcConnection
 from aioredis_cluster.aioredis import (
     Channel,
@@ -52,6 +43,7 @@ from aioredis_cluster.command_info.commands import (
 )
 from aioredis_cluster.crc import CrossSlotError, determine_slot
 from aioredis_cluster.errors import MovedError, RedisError
+from aioredis_cluster.pubsub import PubSubStore
 from aioredis_cluster.typedef import PClosableConnection
 from aioredis_cluster.util import encode_command, ensure_bytes
 
@@ -88,140 +80,6 @@ async def close_connections(conns: Iterable[PClosableConnection]) -> None:
         await asyncio.wait(close_waiters)
 
 
-class PubSub:
-    def __init__(self) -> None:
-        self._channels: coerced_keys_dict[AbcChannel] = coerced_keys_dict()
-        self._patterns: coerced_keys_dict[AbcChannel] = coerced_keys_dict()
-        self._sharded: coerced_keys_dict[AbcChannel] = coerced_keys_dict()
-        self._sharded_to_slot: Dict[bytes, int] = {}
-        self._slot_to_sharded: Dict[int, Set[bytes]] = {}
-
-    @property
-    def channels(self) -> Mapping[str, AbcChannel]:
-        """Returns read-only channels dict."""
-        return MappingProxyType(self._channels)
-
-    @property
-    def patterns(self) -> Mapping[str, AbcChannel]:
-        """Returns read-only patterns dict."""
-        return MappingProxyType(self._patterns)
-
-    @property
-    def sharded(self) -> Mapping[str, AbcChannel]:
-        """Returns read-only sharded channels dict."""
-        return MappingProxyType(self._sharded)
-
-    def channel_subscribe(
-        self,
-        *,
-        channel_type: PubSubType,
-        channel_name: bytes,
-        channel: AbcChannel,
-        key_slot: int,
-    ) -> None:
-        if channel_type is PubSubType.CHANNEL:
-            if channel_name not in self._channels:
-                self._channels[channel_name] = channel
-        elif channel_type is PubSubType.PATTERN:
-            if channel_name not in self._patterns:
-                self._patterns[channel_name] = channel
-        elif channel_type is PubSubType.SHARDED:
-            if channel_name not in self._sharded:
-                self._sharded[channel_name] = channel
-                self._sharded_to_slot[channel_name] = key_slot
-                if key_slot not in self._slot_to_sharded:
-                    self._slot_to_sharded[key_slot] = set((channel_name,))
-                else:
-                    self._slot_to_sharded[key_slot].add(channel_name)
-
-    def channel_unsubscribe(
-        self,
-        *,
-        channel_type: PubSubType,
-        channel_name: bytes,
-    ) -> None:
-        channel: Optional[AbcChannel] = None
-        if channel_type is PubSubType.CHANNEL:
-            channel = self._channels.pop(channel_name, None)
-        elif channel_type is PubSubType.PATTERN:
-            channel = self._patterns.pop(channel_name, None)
-        elif channel_type is PubSubType.SHARDED:
-            channel = self._sharded.pop(channel_name, None)
-            key_slot = self._sharded_to_slot.pop(channel_name, None)
-            if key_slot is not None:
-                key_slot_channels = self._slot_to_sharded[key_slot]
-                key_slot_channels.discard(channel_name)
-                if len(key_slot_channels) == 0:
-                    del self._slot_to_sharded[key_slot]
-
-        if channel is not None:
-            channel.close()
-
-    def slot_channels_unsubscribe(self, key_slot: int) -> None:
-        channel_names = self._slot_to_sharded.pop(key_slot, None)
-        if channel_names is None:
-            return
-
-        while channel_names:
-            channel_name = channel_names.pop()
-            del self._sharded_to_slot[channel_name]
-            channel = self._sharded.pop(channel_name)
-            channel.close()
-
-    def have_slot_channels(self, key_slot: int) -> bool:
-        return key_slot in self._slot_to_sharded
-
-    @property
-    def channels_total(self) -> int:
-        return len(self._channels) + len(self._patterns) + len(self._sharded)
-
-    @property
-    def channels_num(self) -> int:
-        return len(self._channels) + len(self._patterns)
-
-    @property
-    def sharded_channels_num(self) -> int:
-        return len(self._sharded)
-
-    def has_channel(self, channel_type: PubSubType, channel_name: bytes) -> bool:
-        ret = False
-        if channel_type is PubSubType.CHANNEL:
-            ret = channel_name in self._channels
-        elif channel_type is PubSubType.PATTERN:
-            ret = channel_name in self._patterns
-        elif channel_type is PubSubType.SHARDED:
-            ret = channel_name in self._sharded
-        return ret
-
-    def get_channel(self, channel_type: PubSubType, channel_name: bytes) -> AbcChannel:
-        if channel_type is PubSubType.CHANNEL:
-            channel = self._channels[channel_name]
-        elif channel_type is PubSubType.PATTERN:
-            channel = self._patterns[channel_name]
-        elif channel_type is PubSubType.SHARDED:
-            channel = self._sharded[channel_name]
-        else:  # pragma: no cover
-            raise RuntimeError(f"Unexpected channel type {channel_type!r}")
-        return channel
-
-    def close(self, exc: Optional[BaseException]) -> None:
-        while self._channels:
-            _, ch = self._channels.popitem()
-            logger.debug("Closing pubsub channel %r", ch)
-            ch.close(exc)
-        while self._patterns:
-            _, ch = self._patterns.popitem()
-            logger.debug("Closing pubsub pattern %r", ch)
-            ch.close(exc)
-        while self._sharded:
-            _, ch = self._sharded.popitem()
-            logger.debug("Closing sharded pubsub channel %r", ch)
-            ch.close(exc)
-
-        self._slot_to_sharded.clear()
-        self._sharded_to_slot.clear()
-
-
 class RedisConnection(AbcConnection):
     def __init__(
         self,
@@ -250,7 +108,7 @@ class RedisConnection(AbcConnection):
         self._close_state = asyncio.Event()
         self._in_transaction: Optional[Deque[Tuple[Optional[str], Optional[Callable]]]] = None
         self._transaction_error: Optional[Exception] = None  # XXX: never used?
-        self._pubsub_channels_store = PubSub()
+        self._pubsub_store = PubSubStore()
         # client side PubSub mode flag
         self._client_in_pubsub = False
         # confirmed PubSub from Redis server via first subscribe reply
@@ -290,17 +148,17 @@ class RedisConnection(AbcConnection):
     @property
     def pubsub_channels(self) -> Mapping[str, AbcChannel]:
         """Returns read-only channels dict."""
-        return self._pubsub_channels_store.channels
+        return self._pubsub_store.channels
 
     @property
     def pubsub_patterns(self) -> Mapping[str, AbcChannel]:
         """Returns read-only patterns dict."""
-        return self._pubsub_channels_store.patterns
+        return self._pubsub_store.patterns
 
     @property
     def sharded_pubsub_channels(self) -> Mapping[str, AbcChannel]:
         """Returns read-only sharded channels dict."""
-        return self._pubsub_channels_store.sharded
+        return self._pubsub_store.sharded
 
     async def auth(self, password: str) -> bool:
         """Authenticate to server."""
@@ -390,11 +248,11 @@ class RedisConnection(AbcConnection):
             if is_subscribe_command:
                 raise ValueError("No channels to (un)subscribe")
             elif channel_type is PubSubType.PATTERN:
-                channels_obj = list(self._pubsub_channels_store.patterns.values())
+                channels_obj = list(self._pubsub_store.patterns.values())
             elif channel_type is PubSubType.SHARDED:
-                channels_obj = list(self._pubsub_channels_store.sharded.values())
+                channels_obj = list(self._pubsub_store.sharded.values())
             else:
-                channels_obj = list(self._pubsub_channels_store.channels.values())
+                channels_obj = list(self._pubsub_store.channels.values())
         else:
             mkchannel = partial(Channel, is_pattern=is_pattern)
             channels_obj = []
@@ -424,30 +282,31 @@ class RedisConnection(AbcConnection):
         if is_subscribe_command:
             for ch in channels_obj:
                 channel_name = ensure_bytes(ch.name)
-                self._pubsub_channels_store.channel_subscribe(
+                self._pubsub_store.channel_subscribe(
                     channel_type=channel_type,
                     channel_name=channel_name,
                     channel=ch,
                     key_slot=key_slot,
                 )
                 if channel_type is PubSubType.SHARDED:
-                    channels_num = self._pubsub_channels_store.sharded_channels_num
+                    channels_num = self._pubsub_store.sharded_channels_num
                 else:
-                    channels_num = self._pubsub_channels_store.channels_num
+                    channels_num = self._pubsub_store.channels_num
                 res.append([reply_kind, channel_name, channels_num])
 
         # otherwise unsubscribe command
         else:
             for ch in channels_obj:
                 channel_name = ensure_bytes(ch.name)
-                self._pubsub_channels_store.channel_unsubscribe(
+                self._pubsub_store.channel_unsubscribe(
                     channel_type=channel_type,
                     channel_name=channel_name,
+                    by_reply=False,
                 )
                 if channel_type is PubSubType.SHARDED:
-                    channels_num = self._pubsub_channels_store.sharded_channels_num
+                    channels_num = self._pubsub_store.sharded_channels_num
                 else:
-                    channels_num = self._pubsub_channels_store.channels_num
+                    channels_num = self._pubsub_store.channels_num
                 res.append([reply_kind, channel_name, channels_num])
 
         if self._pipeline_buffer is None:
@@ -606,7 +465,7 @@ class RedisConnection(AbcConnection):
             else:
                 _set_exception(waiter.fut, exc)
 
-        self._pubsub_channels_store.close(exc)
+        self._pubsub_store.close(exc)
 
     def _on_reader_task_done(self, task: asyncio.Task) -> None:
         if not task.cancelled() and task.exception():
@@ -673,7 +532,7 @@ class RedisConnection(AbcConnection):
                             "Received MOVED in PubSub mode. Unsubscribe all channels from %d slot",
                             obj.info.slot_id,
                         )
-                        self._pubsub_channels_store.slot_channels_unsubscribe(obj.info.slot_id)
+                        self._pubsub_store.slot_channels_unsubscribe(obj.info.slot_id)
                     elif isinstance(obj, RedisError):
                         raise obj
                     else:
@@ -681,14 +540,12 @@ class RedisConnection(AbcConnection):
                 else:
                     if isinstance(obj, RedisError):
                         if isinstance(obj, MovedError):
-                            if self._pubsub_channels_store.have_slot_channels(obj.info.slot_id):
+                            if self._pubsub_store.have_slot_channels(obj.info.slot_id):
                                 logger.warning(
                                     "Received MOVED. Unsubscribe all channels from %d slot",
                                     obj.info.slot_id,
                                 )
-                                self._pubsub_channels_store.slot_channels_unsubscribe(
-                                    obj.info.slot_id
-                                )
+                                self._pubsub_store.slot_channels_unsubscribe(obj.info.slot_id)
                         elif isinstance(obj, ReplyError):
                             if obj.args[0].startswith("READONLY"):
                                 obj = ReadOnlyError(obj.args[0])
@@ -722,7 +579,7 @@ class RedisConnection(AbcConnection):
     def _wakeup_waiter_with_result(self, result: Any) -> None:
         """Processes command results."""
 
-        if self._loop.get_debug():
+        if self._loop.get_debug():  # pragma: no cover
             logger.debug("Wakeup first waiter for reply: %r", result)
 
         if not self._waiters:
@@ -766,7 +623,7 @@ class RedisConnection(AbcConnection):
         and used as callback in `execute_pubsub` for first PubSub mode initial reply
         """
 
-        if self._loop.get_debug():
+        if self._loop.get_debug():  # pragma: no cover
             logger.debug(
                 "Process PubSub reply (client_in_pubsub:%s, server_in_pubsub:%s): %r",
                 self._client_in_pubsub,
@@ -785,16 +642,20 @@ class RedisConnection(AbcConnection):
 
         if kind in {b"subscribe", b"psubscribe", b"ssubscribe"}:
             logger.debug("PubSub %s event received: %r", kind, obj)
-            # confirm PubSub mode in client side based on server reply and reset pending flag
+            (channel_name,) = args
+            channel_type = PUBSUB_RESP_KIND_TO_TYPE[kind]
             if self._client_in_pubsub and not self._server_in_pubsub:
                 self._server_in_pubsub = True
+            # confirm PubSub mode in client side based on server reply and reset pending flag
+            self._pubsub_store.confirm_subscribe(channel_type, channel_name)
         elif kind in {b"unsubscribe", b"punsubscribe", b"sunsubscribe"}:
             logger.debug("PubSub %s event received: %r", kind, obj)
             (channel_name,) = args
             channel_type = PUBSUB_RESP_KIND_TO_TYPE[kind]
-            self._pubsub_channels_store.channel_unsubscribe(
+            self._pubsub_store.channel_unsubscribe(
                 channel_type=channel_type,
                 channel_name=channel_name,
+                by_reply=True,
             )
         elif kind in {b"message", b"smessage", b"pmessage"}:
             if kind == b"pmessage":
@@ -804,8 +665,8 @@ class RedisConnection(AbcConnection):
                 pattern = channel_name
 
             channel_type = PUBSUB_RESP_KIND_TO_TYPE[kind]
-            if self._pubsub_channels_store.has_channel(channel_type, pattern):
-                channel = self._pubsub_channels_store.get_channel(channel_type, pattern)
+            if self._pubsub_store.has_channel(channel_type, pattern):
+                channel = self._pubsub_store.get_channel(channel_type, pattern)
                 if channel_type is PubSubType.PATTERN:
                     channel.put_nowait((channel_name, data))
                 else:
