@@ -8,6 +8,7 @@ import pytest
 from aioredis_cluster.aioredis import ChannelClosedError
 from aioredis_cluster.aioredis.stream import StreamReader
 from aioredis_cluster.command_info.commands import PUBSUB_SUBSCRIBE_COMMANDS
+from aioredis_cluster.compat.asyncio import timeout
 from aioredis_cluster.connection import RedisConnection
 from aioredis_cluster.errors import MovedError, RedisError
 
@@ -580,23 +581,33 @@ async def test_resubscribe_with_message_received(add_async_finalizer):
 
     await moment()
 
-    asyncio.ensure_future(redis.execute_pubsub("SUNSUBSCRIBE", "chan2:{shard}"))
+    asyncio.ensure_future(redis.execute_pubsub("SUNSUBSCRIBE", "chan1:{shard}"))
 
     await moment()
 
     resub_task = asyncio.ensure_future(redis.execute_pubsub("SSUBSCRIBE", "chan1:{shard}"))
-
-    reader.queue.put_nowait([b"smessage", b"chan2:{shard}", b"msg1"])
-    reader.queue.put_nowait([b"sunsubscribe", b"chan2:{shard}", 0])
-    reader.queue.put_nowait([b"smessage", b"chan2:{shard}", b"msg2"])
-
     await moment()
 
-    channel_name = resub_task.result()[0]
+    reader.queue.put_nowait([b"smessage", b"chan1:{shard}", b"msg1"])
+    reader.queue.put_nowait([b"sunsubscribe", b"chan1:{shard}", 0])
+    reader.queue.put_nowait([b"ssubscribe", b"chan1:{shard}", 1])
+    reader.queue.put_nowait([b"smessage", b"chan1:{shard}", b"msg2"])
+
+    # push loop cycle for received events
+    await moment()
+
+    channel_name = resub_task.result()[0][1]
     ch = redis.sharded_pubsub_channels[channel_name]
 
-    ch_get_task = asyncio.ensure_future(ch.get())
-    # start task
-    await moment()
+    async with timeout(0):
+        msg1 = await ch.get()
+    assert msg1 == b"msg1"
 
-    assert ch_get_task.done() is False
+    async with timeout(0):
+        msg2 = await ch.get()
+    assert msg2 == b"msg2"
+
+    # no more messages
+    with pytest.raises(asyncio.TimeoutError):
+        async with timeout(0.001):
+            await ch.get()
