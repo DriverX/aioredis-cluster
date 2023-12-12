@@ -528,11 +528,18 @@ class RedisConnection(AbcConnection):
 
                 if self._server_in_pubsub:
                     if isinstance(obj, MovedError):
-                        logger.warning(
-                            "Received MOVED in PubSub mode. Unsubscribe all channels from %d slot",
-                            obj.info.slot_id,
-                        )
-                        self._pubsub_store.slot_channels_unsubscribe(obj.info.slot_id)
+                        if self._pubsub_store.have_slot_channels(obj.info.slot_id):
+                            logger.warning(
+                                (
+                                    "Received MOVED in PubSub mode from %s to %s:%s. "
+                                    "Unsubscribe all channels from %d slot",
+                                ),
+                                self.address,
+                                obj.info.host,
+                                obj.info.port,
+                                obj.info.slot_id,
+                            )
+                            self._pubsub_store.slot_channels_unsubscribe(obj.info.slot_id)
                     elif isinstance(obj, RedisError):
                         raise obj
                     else:
@@ -542,7 +549,13 @@ class RedisConnection(AbcConnection):
                         if isinstance(obj, MovedError):
                             if self._pubsub_store.have_slot_channels(obj.info.slot_id):
                                 logger.warning(
-                                    "Received MOVED. Unsubscribe all channels from %d slot",
+                                    (
+                                        "Received MOVED from %s to %s:%s. "
+                                        "Unsubscribe all channels from %d slot",
+                                    ),
+                                    self.address,
+                                    obj.info.host,
+                                    obj.info.port,
                                     obj.info.slot_id,
                                 )
                                 self._pubsub_store.slot_channels_unsubscribe(obj.info.slot_id)

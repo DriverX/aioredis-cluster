@@ -105,10 +105,25 @@ class ClusterCommandsMixin:
         fut = self.execute(b"CLUSTER", b"SET-CONFIG-EPOCH", config_epoch)
         return wait_ok(fut)
 
-    def cluster_setslot(self, slot: int, command, node_id: str = None):
+    def cluster_setslot(self, slot: int, subcommand: str, node_id: str = None):
         """Bind a hash slot to specified node."""
 
-        raise NotImplementedError()
+        subcommand = subcommand.upper()
+        if subcommand in {"NODE", "IMPORTING", "MIGRATING"}:
+            if not node_id:
+                raise ValueError(f"For subcommand {subcommand} node_id must be provided")
+        elif subcommand in {"STABLE"}:
+            if node_id:
+                raise ValueError("For subcommand STABLE node_id is not required")
+        else:
+            raise ValueError(f"Unknown subcommand {subcommand}")
+
+        extra = []
+        if node_id:
+            extra.append(node_id)
+
+        fut = self.execute(b"CLUSTER", b"SETSLOT", slot, subcommand, *extra)
+        return fut
 
     def cluster_slaves(self, node_id: str):
         """List slave nodes of the specified master node."""
