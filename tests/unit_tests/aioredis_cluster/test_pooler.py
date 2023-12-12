@@ -3,7 +3,7 @@ from unittest import mock
 
 import pytest
 
-from aioredis_cluster.abc import AbcPool
+from aioredis_cluster.abc import AbcConnection, AbcPool
 from aioredis_cluster.pooler import Pooler
 from aioredis_cluster.structs import Address
 
@@ -34,7 +34,11 @@ async def test_ensure_pool__identical_address(add_async_finalizer):
 
 
 async def test_ensure_pool__multiple(add_async_finalizer):
-    pools = [object(), object(), object()]
+    pools = [
+        mock.AsyncMock(AbcConnection),
+        mock.AsyncMock(AbcConnection),
+        mock.AsyncMock(AbcConnection),
+    ]
     mocked_create_pool = mock.AsyncMock(side_effect=pools)
 
     pooler = Pooler(mocked_create_pool)
@@ -92,7 +96,7 @@ async def test_ensure_pool__only_one(add_async_finalizer):
 
 
 async def test_ensure_pool__error(add_async_finalizer):
-    pools = [RuntimeError(), object()]
+    pools = [RuntimeError(), mock.AsyncMock(AbcConnection)]
     mocked_create_pool = mock.AsyncMock(side_effect=pools)
 
     pooler = Pooler(mocked_create_pool)
