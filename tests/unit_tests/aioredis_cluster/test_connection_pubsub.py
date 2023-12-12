@@ -566,3 +566,37 @@ async def test_immediately_resubscribe(caplog, add_async_finalizer):
     await moment()
 
     assert ch_get_task.done() is False
+
+
+async def test_resubscribe_with_message_received(add_async_finalizer):
+    reader = get_mocked_reader()
+    writer = get_mocked_writer()
+    redis = RedisConnection(reader=reader, writer=writer, address="localhost:6379")
+    add_async_finalizer(lambda: close_connection(redis))
+
+    # switch connection to pubsub mode
+    asyncio.ensure_future(redis.execute_pubsub("SSUBSCRIBE", "chan1:{shard}"))
+    reader.queue.put_nowait([b"ssubscribe", b"chan1:{shard}", 1])
+
+    await moment()
+
+    asyncio.ensure_future(redis.execute_pubsub("SUNSUBSCRIBE", "chan2:{shard}"))
+
+    await moment()
+
+    resub_task = asyncio.ensure_future(redis.execute_pubsub("SSUBSCRIBE", "chan1:{shard}"))
+
+    reader.queue.put_nowait([b"smessage", b"chan2:{shard}", b"msg1"])
+    reader.queue.put_nowait([b"sunsubscribe", b"chan2:{shard}", 0])
+    reader.queue.put_nowait([b"smessage", b"chan2:{shard}", b"msg2"])
+
+    await moment()
+
+    channel_name = resub_task.result()[0]
+    ch = redis.sharded_pubsub_channels[channel_name]
+
+    ch_get_task = asyncio.ensure_future(ch.get())
+    # start task
+    await moment()
+
+    assert ch_get_task.done() is False
