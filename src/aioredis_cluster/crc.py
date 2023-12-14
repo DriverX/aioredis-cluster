@@ -10,6 +10,8 @@ except ImportError:
 __all__ = (
     "crc16",
     "key_slot",
+    "determine_slot",
+    "CrossSlotError",
 )
 
 REDIS_CLUSTER_HASH_SLOTS = 16384
@@ -43,3 +45,16 @@ if cy_key_slot:
     key_slot = cy_key_slot
 else:
     key_slot = py_key_slot
+
+
+class CrossSlotError(Exception):
+    pass
+
+
+def determine_slot(first_key: bytes, *keys: bytes) -> int:
+    slot: int = key_slot(first_key)
+    for k in keys:
+        if slot != key_slot(k):
+            raise CrossSlotError("all keys must map to the same key slot")
+
+    return slot

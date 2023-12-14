@@ -3,17 +3,18 @@ import collections
 import logging
 import random
 import types
-from typing import Deque, Dict, List, Mapping, Optional, Set, Tuple, Type, Union
+from typing import Deque, List, Mapping, Optional, Set, Tuple, Type, Union
 
 from aioredis_cluster._aioredis.pool import (
     _AsyncConnectionContextManager,
     _ConnectionContextManager,
 )
 from aioredis_cluster._aioredis.util import CloseEvent
-from aioredis_cluster.abc import AbcConnection, AbcPool
-from aioredis_cluster.aioredis import Channel, PoolClosedError, create_connection
+from aioredis_cluster.abc import AbcChannel, AbcConnection, AbcPool
+from aioredis_cluster.aioredis import PoolClosedError, create_connection
 from aioredis_cluster.command_info.commands import (
     BLOCKING_COMMANDS,
+    PATTERN_PUBSUB_COMMANDS,
     PUBSUB_COMMANDS,
     PUBSUB_FAMILY_COMMANDS,
     SHARDED_PUBSUB_COMMANDS,
@@ -226,7 +227,7 @@ class ConnectionsPool(AbcPool):
 
         self._check_closed()
 
-        if command in PUBSUB_COMMANDS:
+        if command in PUBSUB_COMMANDS or command in PATTERN_PUBSUB_COMMANDS:
             conn = await self._get_pubsub_connection()
         elif command in SHARDED_PUBSUB_COMMANDS:
             conn = await self._get_sharded_pubsub_connection()
@@ -246,7 +247,7 @@ class ConnectionsPool(AbcPool):
         command = command.upper().strip()
         ret_conn: Optional[AbcConnection] = None
 
-        if command in PUBSUB_COMMANDS:
+        if command in PUBSUB_COMMANDS or command in PATTERN_PUBSUB_COMMANDS:
             if self._pubsub_conn and not self._pubsub_conn.closed:
                 ret_conn = self._pubsub_conn
         elif command in SHARDED_PUBSUB_COMMANDS:
@@ -267,18 +268,23 @@ class ConnectionsPool(AbcPool):
 
         return ret_conn, self._address
 
-    async def select(self, db):
-        """For cluster implementation this method is unavailable"""
+    async def select(self, db: int) -> bool:
+        """Changes db index for all free connections.
+
+        All previously acquired connections will be closed when released.
+
+        For cluster implementation this method is unavailable
+        """
         raise NotImplementedError("Feature is blocked in cluster mode")
 
-    async def auth(self, password) -> None:
+    async def auth(self, password: str) -> None:
         self._password = password
         async with self._cond:
             for conn in tuple(self._pool):
                 conn.set_last_use_generation(self._idle_connections_collect_gen)
                 await conn.auth(password)
 
-    async def auth_with_username(self, username, password) -> None:
+    async def auth_with_username(self, username: str, password: str) -> None:
         self._username = username
         self._password = password
         async with self._cond:
@@ -299,29 +305,30 @@ class ConnectionsPool(AbcPool):
 
     @property
     def in_pubsub(self) -> int:
-        in_pubsub = 0
+        if self._pubsub_conn and not self._pubsub_conn.closed and self._pubsub_conn.in_pubsub:
+            return 1
+        if (
+            self._sharded_pubsub_conn
+            and not self._sharded_pubsub_conn.closed
+            and self._sharded_pubsub_conn.in_pubsub
+        ):
+            return 1
+        return 0
+
+    @property
+    def pubsub_channels(self) -> Mapping[str, AbcChannel]:
         if self._pubsub_conn and not self._pubsub_conn.closed:
-            in_pubsub += self._pubsub_conn.in_pubsub
+            return self._pubsub_conn.pubsub_channels
+        return types.MappingProxyType({})
+
+    @property
+    def sharded_pubsub_channels(self) -> Mapping[str, AbcChannel]:
         if self._sharded_pubsub_conn and not self._sharded_pubsub_conn.closed:
-            in_pubsub += self._sharded_pubsub_conn.in_pubsub
-        return in_pubsub
+            return self._sharded_pubsub_conn.sharded_pubsub_channels
+        return types.MappingProxyType({})
 
     @property
-    def pubsub_channels(self) -> Mapping[str, Channel]:
-        channels: Dict[str, Channel] = {}
-        if self._pubsub_conn and not self._pubsub_conn.closed:
-            channels.update(self._pubsub_conn.pubsub_channels)
-        return types.MappingProxyType(channels)
-
-    @property
-    def sharded_pubsub_channels(self) -> Mapping[str, Channel]:
-        channels: Dict[str, Channel] = {}
-        if self._sharded_pubsub_conn and not self._sharded_pubsub_conn.closed:
-            channels.update(self._sharded_pubsub_conn.sharded_pubsub_channels)
-        return types.MappingProxyType(channels)
-
-    @property
-    def pubsub_patterns(self):
+    def pubsub_patterns(self) -> Mapping[str, AbcChannel]:
         if self._pubsub_conn and not self._pubsub_conn.closed:
             return self._pubsub_conn.pubsub_patterns
         return types.MappingProxyType({})
@@ -375,7 +382,7 @@ class ConnectionsPool(AbcPool):
                 logger.warning("Connection %r is in transaction, closing it.", conn)
                 conn.close()
             elif conn.in_pubsub:
-                logger.warning("Connection %r is in subscribe mode, closing it.", conn)
+                logger.warning("Connection %r is in PubSub mode, closing it.", conn)
                 conn.close()
             elif conn._waiters:
                 logger.warning("Connection %r has pending commands, closing it.", conn)

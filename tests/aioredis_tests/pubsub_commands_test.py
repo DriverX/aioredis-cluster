@@ -4,6 +4,7 @@ import pytest
 from _testutils import redis_version
 
 from aioredis_cluster import _aioredis as aioredis
+from aioredis_cluster.connection import RedisConnection as ClusterConnection
 
 
 async def _reader(channel, output, waiter, conn):
@@ -49,7 +50,12 @@ async def test_publish_json(create_connection, redis, server):
 
 async def test_subscribe(redis):
     res = await redis.subscribe("chan:1", "chan:2")
-    assert redis.in_pubsub == 2
+
+    assert len(redis.connection.pubsub_channels) == 2
+    if isinstance(redis.connection, ClusterConnection):
+        assert redis.in_pubsub == 1
+    else:
+        assert redis.in_pubsub == 2
 
     ch1 = redis.channels["chan:1"]
     ch2 = redis.channels["chan:2"]
@@ -60,6 +66,39 @@ async def test_subscribe(redis):
 
     res = await redis.unsubscribe("chan:1", "chan:2")
     assert res == [[b"unsubscribe", b"chan:1", 1], [b"unsubscribe", b"chan:2", 0]]
+
+
+async def test_subscribe__multiple_times(redis):
+    res1 = await redis.subscribe("chan:1")
+    assert redis.in_pubsub == 1
+    res2 = await redis.subscribe("chan:1")
+    assert redis.in_pubsub == 1
+    res3 = await redis.psubscribe("chan:1")
+
+    assert len(redis.connection.pubsub_channels) == 1
+    assert len(redis.connection.pubsub_patterns) == 1
+    if isinstance(redis.connection, ClusterConnection):
+        assert redis.in_pubsub == 1
+    else:
+        assert redis.in_pubsub == 2
+    # res4 = await redis.connection.execute_pubsub("SSUBSCRIBE", "chan:1")
+    # assert redis.in_pubsub == 3
+
+    ch1 = redis.channels["chan:1"]
+    ch3 = redis.patterns["chan:1"]
+
+    assert res1 == [ch1]
+    assert res2 == [ch1]
+    assert res3 == [ch3]
+
+    res = await redis.unsubscribe("chan:1")
+    assert res == [[b"unsubscribe", b"chan:1", 1]]
+
+    res = await redis.punsubscribe("chan:1")
+    assert res == [[b"punsubscribe", b"chan:1", 0]]
+
+    res = await redis.unsubscribe("chan:1")
+    assert res == [[b"unsubscribe", b"chan:1", 0]]
 
 
 @pytest.mark.parametrize(
@@ -90,7 +129,10 @@ async def test_subscribe_empty_pool(create_redis, server, _closable):
 async def test_psubscribe(redis, create_redis, server):
     sub = redis
     res = await sub.psubscribe("patt:*", "chan:*")
-    assert sub.in_pubsub == 2
+    if isinstance(redis.connection, ClusterConnection):
+        assert sub.in_pubsub == 1
+    else:
+        assert sub.in_pubsub == 2
 
     pat1 = sub.patterns["patt:*"]
     pat2 = sub.patterns["chan:*"]
@@ -122,7 +164,12 @@ async def test_psubscribe_empty_pool(create_redis, server, _closable):
     _closable(pub)
     await sub.connection.clear()
     res = await sub.psubscribe("patt:*", "chan:*")
-    assert sub.in_pubsub == 2
+
+    assert len(sub.connection.pubsub_patterns) == 2
+    if isinstance(sub.connection, ClusterConnection):
+        assert sub.in_pubsub == 1
+    else:
+        assert sub.in_pubsub == 2
 
     pat1 = sub.patterns["patt:*"]
     pat2 = sub.patterns["chan:*"]

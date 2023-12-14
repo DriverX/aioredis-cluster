@@ -1,8 +1,8 @@
-from typing import Awaitable, Callable
+from typing import Awaitable, Callable, Mapping
 
 from aioredis_cluster._aioredis.commands.pubsub import wait_return_channels
 from aioredis_cluster._aioredis.util import wait_make_dict
-from aioredis_cluster.abc import AbcConnection
+from aioredis_cluster.abc import AbcChannel, AbcConnection
 
 
 class ShardedPubSubCommandsMixin:
@@ -54,7 +54,7 @@ class ShardedPubSubCommandsMixin:
         return wait_make_dict(self.execute(b"PUBSUB", b"SHARDNUMSUB", *channels))
 
     @property
-    def sharded_pubsub_channels(self):
+    def sharded_pubsub_channels(self) -> Mapping[str, AbcChannel]:
         """Returns read-only channels dict.
 
         See :attr:`~aioredis.RedisConnection.pubsub_channels`

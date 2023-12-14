@@ -1,5 +1,6 @@
 # redis command output (v5.0.8)
-from typing import FrozenSet, Iterable, MutableSet, Union
+import enum
+from typing import Dict, FrozenSet, Iterable, Mapping, MutableSet, Union, cast
 
 __all__ = (
     "COMMANDS",
@@ -10,9 +11,14 @@ __all__ = (
     "XREAD_COMMAND",
     "XREADGROUP_COMMAND",
     "PUBSUB_COMMANDS",
+    "PATTERN_PUBSUB_COMMANDS",
     "SHARDED_PUBSUB_COMMANDS",
     "PUBSUB_FAMILY_COMMANDS",
     "PING_COMMANDS",
+    "PUBSUB_SUBSCRIBE_COMMANDS",
+    "PUBSUB_COMMAND_TO_TYPE",
+    "PUBSUB_RESP_KIND_TO_TYPE",
+    "PubSubType",
 )
 
 
@@ -270,11 +276,17 @@ XREAD_COMMAND = "XREAD"
 XREADGROUP_COMMAND = "XREADGROUP"
 
 
-PUBSUB_COMMANDS = _gen_commands_set(
+class PubSubType(enum.Enum):
+    CHANNEL = enum.auto()
+    PATTERN = enum.auto()
+    SHARDED = enum.auto()
+
+
+PUBSUB_COMMANDS = _gen_commands_set({"SUBSCRIBE", "UNSUBSCRIBE"})
+
+PATTERN_PUBSUB_COMMANDS = _gen_commands_set(
     {
-        "SUBSCRIBE",
         "PSUBSCRIBE",
-        "UNSUBSCRIBE",
         "PUNSUBSCRIBE",
     }
 )
@@ -286,6 +298,35 @@ SHARDED_PUBSUB_COMMANDS = _gen_commands_set(
     }
 )
 
-PUBSUB_FAMILY_COMMANDS = PUBSUB_COMMANDS | SHARDED_PUBSUB_COMMANDS
+PUBSUB_SUBSCRIBE_COMMANDS = _gen_commands_set(
+    {
+        "SUBSCRIBE",
+        "PSUBSCRIBE",
+        "SSUBSCRIBE",
+    }
+)
+
+PUBSUB_FAMILY_COMMANDS = PUBSUB_COMMANDS | PATTERN_PUBSUB_COMMANDS | SHARDED_PUBSUB_COMMANDS
 
 PING_COMMANDS = _gen_commands_set({"PING"})
+
+PUBSUB_RESP_KIND_TO_TYPE: Mapping[bytes, PubSubType] = {
+    b"message": PubSubType.CHANNEL,
+    b"subscribe": PubSubType.CHANNEL,
+    b"unsubscribe": PubSubType.CHANNEL,
+    b"pmessage": PubSubType.PATTERN,
+    b"psubscribe": PubSubType.PATTERN,
+    b"punsubscribe": PubSubType.PATTERN,
+    b"smessage": PubSubType.SHARDED,
+    b"ssubscribe": PubSubType.SHARDED,
+    b"sunsubscribe": PubSubType.SHARDED,
+}
+
+_pubsub_command_to_type: Dict[Union[str, bytes], PubSubType] = {}
+for cmd in PUBSUB_COMMANDS:
+    _pubsub_command_to_type[cmd] = PubSubType.CHANNEL
+for cmd in PATTERN_PUBSUB_COMMANDS:
+    _pubsub_command_to_type[cmd] = PubSubType.PATTERN
+for cmd in SHARDED_PUBSUB_COMMANDS:
+    _pubsub_command_to_type[cmd] = PubSubType.SHARDED
+PUBSUB_COMMAND_TO_TYPE = cast(Mapping[Union[str, bytes], PubSubType], _pubsub_command_to_type)

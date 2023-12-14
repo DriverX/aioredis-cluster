@@ -212,6 +212,9 @@ class ClusterState:
     def has_addr(self, addr: Address) -> bool:
         return addr in self._data.nodes
 
+    def addr_node(self, addr: Address) -> ClusterNode:
+        return self._data.nodes[addr]
+
     def master_replicas(self, addr: Address) -> List[ClusterNode]:
         try:
             return list(self._data.replicas[addr])

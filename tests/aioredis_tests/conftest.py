@@ -9,6 +9,8 @@ import sys
 import tempfile
 import time
 from collections import namedtuple
+from functools import partial
+from typing import List
 from urllib.parse import urlencode, urlunparse
 
 import pytest
@@ -16,7 +18,18 @@ import pytest_asyncio
 
 from aioredis_cluster import _aioredis as aioredis
 from aioredis_cluster._aioredis import sentinel as aioredis_sentinel
+from aioredis_cluster.aioredis import create_redis as custom_create_redis
 from aioredis_cluster.compat.asyncio import timeout as atimeout
+from aioredis_cluster.connection import RedisConnection
+
+try:
+    import aioredis as _origin_aioredis
+
+    (_origin_aioredis,)
+    aioredis_installed = True
+except ImportError:
+    aioredis_installed = False
+
 
 TCPAddress = namedtuple("TCPAddress", "host port")
 
@@ -59,8 +72,25 @@ def create_connection(_closable):
     return f
 
 
+create_redis_fixture_params: List = [
+    aioredis.create_redis,
+    aioredis.create_redis_pool,
+]
+create_redis_fixture_ids: List = [
+    "single",
+    "pool",
+]
+
+if aioredis_installed is False:
+    create_redis_fixture_params.append(partial(custom_create_redis, connection_cls=RedisConnection))
+    create_redis_fixture_ids.append(
+        "single_from_cluster",
+    )
+
+
 @pytest_asyncio.fixture(
-    params=[aioredis.create_redis, aioredis.create_redis_pool], ids=["single", "pool"]
+    params=create_redis_fixture_params,
+    ids=create_redis_fixture_ids,
 )
 def create_redis(_closable, request):
     """Wrapper around aioredis.create_redis."""

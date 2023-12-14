@@ -88,7 +88,7 @@ target-version = ["py38"]
 exclude = '.pyi$'
 
 [tool.pytest.ini_options]
-addopts = "--cov-report=term --cov-report=html -v"
+addopts = "-v --cov --cov-report=term --cov-report=html"
 asyncio_mode = "auto"
 
 [tool.coverage.run]

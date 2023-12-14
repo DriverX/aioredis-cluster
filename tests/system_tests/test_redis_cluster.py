@@ -156,7 +156,7 @@ async def test_sharded_pubsub(redis_cluster):
     ch2: Channel = channels[0]
 
     assert len(cl1.sharded_pubsub_channels) == 2
-    assert cl1.in_pubsub == 2
+    assert cl1.in_pubsub == 1
     assert len(cl1.channels) == 0
     assert len(cl1.patterns) == 0
 
@@ -173,7 +173,7 @@ async def test_sharded_pubsub(redis_cluster):
     await cl1.sunsubscribe("channel2")
 
     assert len(cl1.sharded_pubsub_channels) == 0
-    assert cl1.in_pubsub == 0
+    assert cl1.in_pubsub == 1
 
 
 @pytest.mark.redis_version(gte="7.0.0")
@@ -186,7 +186,7 @@ async def test_sharded_pubsub__multiple_subscribe(redis_cluster):
     ch3: Channel = (await cl1.ssubscribe("channel:{shard_key}:3"))[0]
 
     assert len(cl1.sharded_pubsub_channels) == 3
-    assert cl1.in_pubsub == 3
+    assert cl1.in_pubsub == 1
 
     shard_pool = await cl1.keys_master("{shard_key}")
     assert len(shard_pool.sharded_pubsub_channels) == 3
