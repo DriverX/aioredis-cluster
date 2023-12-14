@@ -1,6 +1,23 @@
 Changes
 =======
 
+2.7.0 (2023-xx-xx)
+---------------------
+
+Rework PubSub and fix race conditions ([#27](https://github.com/DriverX/aioredis-cluster/pull/27))
+
+- add `aioredis_cluster.aioredis.stream` module
+- rework PubSub command execution flow for prevent race conditions on spontaneously server channels unsubscribe push
+- make fully dedicated `RedisConnection` implementation for cluster
+- `RedisConnection` once entered in PubSub mode was never exit in them, because is too hard handle spontaneously unsubscribe events from Redis with simultaneously `(P|S)UNSUBSCRIBE` manually calls
+- fully rewrite handling PUB/SUB replies/events
+- for `Cluster`, `RedisConnection` and `ConnectionsPool` `in_pubsub` indicates flag when connector have in pubsub mode connections instead number of PUB/SUB channels
+- add key slot handling for sharded PubSub channels in non-cluster dedicate `RedisConnection`
+- fix and improve legacy `aioredis` tests
+- improve support for py3.12
+- improve support for Redis 7.2
+
+
 2.6.0 (2023-11-02)
 ------------------
 
