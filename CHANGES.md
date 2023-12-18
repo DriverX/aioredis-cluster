@@ -1,7 +1,7 @@
 Changes
 =======
 
-2.7.0 (2023-xx-xx)
+2.7.0 (2023-12-18)
 ---------------------
 
 Rework PubSub and fix race conditions ([#27](https://github.com/DriverX/aioredis-cluster/pull/27))
@@ -16,7 +16,6 @@ Rework PubSub and fix race conditions ([#27](https://github.com/DriverX/aioredis
 - fix and improve legacy `aioredis` tests
 - improve support for py3.12
 - improve support for Redis 7.2
-
 
 2.6.0 (2023-11-02)
 ------------------
